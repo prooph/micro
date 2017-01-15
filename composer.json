@@ -1,0 +1,15 @@
+{
+    "autoload": {
+        "psr-4": {
+            "Prooph\\Micro\\": "src/",
+            "ProophExample\\Micro\\": "examples/"
+        }
+    },
+    "require": {
+        "prooph/common": "4.0.x-dev",
+        "prooph/service-bus": "6.0.x-dev",
+        "prooph/event-store": "7.0.x-dev",
+        "prooph/pdo-event-store": "dev-master",
+        "beberlei/assert": "^2.7"
+    }
+}
