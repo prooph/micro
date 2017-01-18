@@ -36,7 +36,7 @@ final class Fn
             }
 
             //Todo: if we deal with snapshots, we should use $aggregateScope::apply
-            $state = $aggregateScope::reconstituteState($stream);
+            $state = $aggregateScope::reconstituteState($stream->streamEvents());
 
             if(is_string($handlerFunc)) {
                 $handlerFunc = $aggregateScope . '::' . $handlerFunc;

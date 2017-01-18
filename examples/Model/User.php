@@ -1,13 +1,13 @@
 <?php
 declare(strict_types = 1);
 
-namespace ProophExample\Micro\Model;
+namespace ProophExample\Micro\Model\User;
 
+use Iterator;
 use Prooph\Common\Messaging\Message;
 use Prooph\EventStore\Metadata\MetadataEnricher;
 use Prooph\EventStore\Metadata\MetadataMatcher;
 use Prooph\EventStore\Metadata\Operator;
-use Prooph\EventStore\Stream;
 use Prooph\EventStore\StreamName;
 use Prooph\Micro\AggregateResult;
 use Prooph\Micro\Fn;
@@ -19,41 +19,65 @@ use ProophExample\Micro\Model\Event\UserNameWasChanged;
 use ProophExample\Micro\Model\Event\UserWasRegistered;
 use ProophExample\Micro\Model\Event\UserWasRegisteredWithDuplicateEmail;
 
-final class User implements FunctionalAggregate
+function registerUser(RegisterUser $command, array $state): AggregateResult
 {
-    public static function register(RegisterUser $command, array $state, UniqueEmailGuard $guard): AggregateResult
-    {
-        if ($guard->isUnique($command->email())) {
-            $event = new UserWasRegistered($command->payload());
-        } else {
-            $event = new UserWasRegisteredWithDuplicateEmail($command->payload());
-        }
-
-        return self::applyAndBuildResult($state, [$event]);
+    /*
+    if ($guard->isUnique($command->email())) {
+        $event = new UserWasRegistered($command->payload());
+    } else {
+        $event = new UserWasRegisteredWithDuplicateEmail($command->payload());
     }
 
-    public static function changeUserName(ChangeUserName $command, array $state): AggregateResult
-    {
-        Fn::assertTargetState($command, $state, self::identifierName());
+    return self::applyAndBuildResult($state, [$event]);
+    */
 
-        if(!mb_strlen($command->username()) > 3) {
-            throw new \InvalidArgumentException('Username too short');
-        }
+    $event = new UserWasRegistered($command->payload());
 
-        $event = new UserNameWasChanged($command->payload());
+    return new AggregateResult([$event], apply($state, $event));
+}
 
-        return self::applyAndBuildResult($state, [$event]);
+function changeUserName(ChangeUserName $command, array $state): AggregateResult
+{
+    if(!mb_strlen($command->username()) > 3) {
+        throw new \InvalidArgumentException('Username too short');
     }
+
+    $event = new UserNameWasChanged($command->payload());
+
+    return new AggregateResult([$event], apply($state, $event));
+}
+
+function apply(array $state, Message $event): array
+{
+    switch ($event->messageName()) {
+        case UserWasRegistered::class:
+            return array_merge($state, $event->payload(), ['activated' => true]);
+        case UserWasRegisteredWithDuplicateEmail::class:
+            return array_merge($state, $event->payload(), ['activated' => false, 'blocked_reason' => 'duplicate email']);
+        case UserNameWasChanged::class:
+            /* @var UserNameWasChanged $event */
+            return array_merge($state, ['name' => $event->username()]);
+        default:
+            throw new \InvalidArgumentException('Unknown event given');
+    }
+}
+
+/*
+
 
     public static function identifierName(): string
     {
         return 'id';
     }
 
-    public static function reconstituteState(Stream $events): array
+    public static function reconstituteState(Iterator $events): array
     {
         $state = [];
-        foreach ($events->streamEvents() as $event) $state = self::apply($state, $event);
+
+        foreach ($events as $event) {
+            $state = self::apply($state, $event);
+        }
+
         return $state;
     }
 
@@ -65,7 +89,7 @@ final class User implements FunctionalAggregate
             case UserWasRegisteredWithDuplicateEmail::class:
                 return array_merge($state, $event->payload(), ['activated' => false, 'blocked_reason' => 'duplicate email']);
             case UserNameWasChanged::class:
-                /** @var UserNameWasChanged $event */
+                /** @var UserNameWasChanged $event
                 return array_merge($state, ['name' => $event->username()]);
         }
     }
@@ -94,7 +118,11 @@ final class User implements FunctionalAggregate
 
     protected static function applyAndBuildResult(array $state, array $events): AggregateResult
     {
-        foreach ($events as $event) $state = self::apply($state, $event);
+        foreach ($events as $event) {
+            $state = self::apply($state, $event);
+        }
+
         return new AggregateResult($events, $state);
     }
 }
+*/

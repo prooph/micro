@@ -4,42 +4,49 @@ declare(strict_types = 1);
 
 namespace ProophExample\Micro\Script;
 
+use Prooph\Common\Messaging\Message;
+use Prooph\EventStore\EventStore;
+use Prooph\EventStore\Stream;
+use Prooph\Micro\AggregateDefiniton;
+use Prooph\Micro\AggregateResult;
+use Prooph\Micro\Pipe;
+use ProophExample\Micro\Infrastructure\UserAggregateDefinition;
 use ProophExample\Micro\Model\Command\ChangeUserName;
 use ProophExample\Micro\Model\Command\RegisterUser;
-use ProophExample\Micro\Model\User;
 
 require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/Model/User.php';
+require __DIR__ . '/../src/Kernel.php';
 
 //We could also use a container here, if dependencies grow
 $factories = include 'Infrastructure/factories.php';
 
-$commandAggregateMap = [
-    //Example with dependency injection
+$commandMap = [
     RegisterUser::class => [
-        User::class,
-        function(RegisterUser $command, array $state) use (&$factories) {
-            return User::register($command, $state, $factories['emailGuard']());
-        }
+        'handler' => '\ProophExample\Micro\Model\User\registerUser',
+        'definition' => UserAggregateDefinition::class,
     ],
-    //Example where we don't need to inject additional services
     ChangeUserName::class => [
-        User::class,
-        'changeUserName'
+        'handler' => '\ProophExample\Micro\Model\User\changeUserName',
+        'definition' => UserAggregateDefinition::class,
     ]
-
 ];
 
-$eventStore = $factories['eventStore']();
+$eventStore = $factories['eventStore'];
+$eventBus = $factories['eventBus'];
 
-$dispatch = \Prooph\Micro\Fn::connect($commandAggregateMap, $eventStore);
+$dispatch = function(Message $message) use ($commandMap, $eventStore, $eventBus) {
+    return \Prooph\Micro\Kernel\dispatch($message, $commandMap, $eventStore(), $eventBus());
+};
 
-$userState = $dispatch(new RegisterUser(['id' => '1', 'name' => 'Alex', 'email' => 'member@getprooph.org']));
+$command = new RegisterUser(['id' => '1', 'name' => 'Alex', 'email' => 'member@getprooph.org']);
+
+$state = $dispatch($command);
 
 echo "User was registered: \n";
-echo json_encode($userState) . "\n\n";
+echo json_encode($state) . "\n\n";
 
-$userState = $dispatch(new ChangeUserName(['id' => '1', 'name' => 'Sascha']));
+$state = $dispatch(new ChangeUserName(['id' => '1', 'name' => 'Sascha']));
 
 echo "Username changed: \n";
-echo json_encode($userState) . "\n\n";
-
+echo json_encode($state) . "\n\n";

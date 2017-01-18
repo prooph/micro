@@ -20,7 +20,10 @@ $factories = [
 
             return self::$emailGuard;
         }
-    }
+    },
+    'eventBus' => function() {
+        return new \Prooph\ServiceBus\EventBus();
+    },
 ];
 
 return $factories;

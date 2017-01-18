@@ -10,6 +10,7 @@
         "prooph/service-bus": "6.0.x-dev",
         "prooph/event-store": "7.0.x-dev",
         "prooph/pdo-event-store": "dev-master",
+        "prooph/event-sourcing": "5.0.x-dev",
         "beberlei/assert": "^2.7"
     }
 }

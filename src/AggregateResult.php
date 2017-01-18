@@ -11,10 +11,12 @@ final class AggregateResult
 
     private $state;
 
-    public function __construct(array $raisedEvens, array $state)
+    public function __construct(array $raisedEvents, array $state)
     {
-        foreach ($raisedEvens as $event) self::assertEvent($event);
-        $this->raisedEvents = $raisedEvens;
+        foreach ($raisedEvents as $event) {
+            self::assertEvent($event);
+        }
+        $this->raisedEvents = $raisedEvents;
         $this->state = $state;
     }
 
