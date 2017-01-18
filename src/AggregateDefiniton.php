@@ -25,5 +25,5 @@ interface AggregateDefiniton
 
     public function reconstituteState(Iterator $events): array;
 
-    public function apply(array $state, Message $event): array;
+    public function apply(array $state, Message ...$events): array;
 }

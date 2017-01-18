@@ -5,6 +5,7 @@ namespace Prooph\Micro;
 
 use Prooph\Common\Messaging\Message;
 
+// @todo: add interface, and success / error result?
 final class AggregateResult
 {
     private $raisedEvents;

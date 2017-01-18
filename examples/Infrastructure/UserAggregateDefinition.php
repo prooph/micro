@@ -8,9 +8,6 @@ use Prooph\Common\Messaging\Message;
 use Prooph\EventSourcing\Aggregate\AggregateType;
 use Prooph\EventStore\StreamName;
 use Prooph\Micro\AbstractAggregateDefiniton;
-use ProophExample\Micro\Model\Event\UserNameWasChanged;
-use ProophExample\Micro\Model\Event\UserWasRegistered;
-use ProophExample\Micro\Model\Event\UserWasRegisteredWithDuplicateEmail;
 
 final class UserAggregateDefinition extends AbstractAggregateDefiniton
 {
@@ -29,8 +26,8 @@ final class UserAggregateDefinition extends AbstractAggregateDefiniton
         return 'id';
     }
 
-    public function apply(array $state, Message $event): array
+    public function apply(array $state, Message ...$events): array
     {
-        return \ProophExample\Micro\Model\User\apply($state, $event);
+        return \ProophExample\Micro\Model\User\apply($state, ...$events);
     }
 }

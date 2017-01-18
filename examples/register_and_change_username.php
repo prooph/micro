@@ -23,7 +23,10 @@ $factories = include 'Infrastructure/factories.php';
 
 $commandMap = [
     RegisterUser::class => [
-        'handler' => '\ProophExample\Micro\Model\User\registerUser',
+        'handler' => function(Message $message, array $state) use (&$factories): AggregateResult {
+            $handler = '\ProophExample\Micro\Model\User\registerUser';
+            return $handler($message, $state, $factories['emailGuard']());
+        },
         'definition' => UserAggregateDefinition::class,
     ],
     ChangeUserName::class => [

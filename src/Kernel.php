@@ -115,7 +115,13 @@ function publishEvents(EventBus $eventBus): callable
 function getHandler(Message $message, array $commandMap): callable
 {
     if (! array_key_exists($message->messageName(), $commandMap)) {
-        throw new \RuntimeException(sprintf("Unknown message %s. Message name not mapped to an aggregate.", $message->messageName()));
+        //throw new \RuntimeException(sprintf("Unknown message %s. Message name not mapped to an aggregate.", $message->messageName()));
+
+        return function (Message $message, array $state): AggregateResult {
+            return new AggregateResult([], $state);
+        };
+
+        // @todo: short circuit pipe?
     }
 
     return $commandMap[$message->messageName()]['handler'];
