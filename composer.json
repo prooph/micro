@@ -3,7 +3,11 @@
         "psr-4": {
             "Prooph\\Micro\\": "src/",
             "ProophExample\\Micro\\": "examples/"
-        }
+        },
+        "files": [
+            "src/Kernel.php",
+            "examples/Model/User.php"
+        ]
     },
     "require": {
         "prooph/common": "4.0.x-dev",

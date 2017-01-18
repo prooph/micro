@@ -5,18 +5,12 @@ declare(strict_types = 1);
 namespace ProophExample\Micro\Script;
 
 use Prooph\Common\Messaging\Message;
-use Prooph\EventStore\EventStore;
-use Prooph\EventStore\Stream;
-use Prooph\Micro\AggregateDefiniton;
 use Prooph\Micro\AggregateResult;
-use Prooph\Micro\Pipe;
 use ProophExample\Micro\Infrastructure\UserAggregateDefinition;
 use ProophExample\Micro\Model\Command\ChangeUserName;
 use ProophExample\Micro\Model\Command\RegisterUser;
 
 require __DIR__ . '/../vendor/autoload.php';
-require __DIR__ . '/Model/User.php';
-require __DIR__ . '/../src/Kernel.php';
 
 //We could also use a container here, if dependencies grow
 $factories = include 'Infrastructure/factories.php';
