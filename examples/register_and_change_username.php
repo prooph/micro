@@ -30,10 +30,10 @@ $commandMap = [
 ];
 
 $eventStore = $factories['eventStore'];
-$eventBus = $factories['eventBus'];
+$producer = $factories['messageProducer'];
 
-$dispatch = function(Message $message) use ($commandMap, $eventStore, $eventBus) {
-    return \Prooph\Micro\Kernel\dispatch($message, $commandMap, $eventStore(), $eventBus());
+$dispatch = function(Message $message) use ($commandMap, $eventStore, $producer) {
+    return \Prooph\Micro\Kernel\dispatch($message, $commandMap, $eventStore(), $producer);
 };
 
 $command = new RegisterUser(['id' => '1', 'name' => 'Alex', 'email' => 'member@getprooph.org']);

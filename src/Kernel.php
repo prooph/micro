@@ -14,9 +14,10 @@ use Prooph\EventStore\StreamName;
 use Prooph\Micro\AggregateDefiniton;
 use Prooph\Micro\AggregateResult;
 use Prooph\Micro\Pipe;
+use Prooph\ServiceBus\Async\MessageProducer;
 use Prooph\ServiceBus\EventBus;
 
-function dispatch(Message $message, array $commandMap, EventStore $eventStore, EventBus $eventBus): array
+function dispatch(Message $message, array $commandMap, EventStore $eventStore, MessageProducer $producer): array
 {
     $definition = getDefinition($message, $commandMap);
     $aggregateId = extractAggregateId($message, $definition);
@@ -42,7 +43,7 @@ function dispatch(Message $message, array $commandMap, EventStore $eventStore, E
             return $aggregateResult;
         })
         ->pipe(persistEvents($eventStore, $definition, $aggregateId))
-        ->pipe(publishEvents($eventBus))
+        ->pipe(publishEvents($producer))
         ->result();
 }
 
@@ -101,11 +102,11 @@ function extractAggregateId(Message $message, AggregateDefiniton $aggregateDefin
     return $message->payload()[$idProperty];
 }
 
-function publishEvents(EventBus $eventBus): callable
+function publishEvents(MessageProducer $producer): callable
 {
-    return function (AggregateResult $aggregateResult) use ($eventBus): array {
+    return function (AggregateResult $aggregateResult) use ($producer): array {
         foreach ($aggregateResult->raisedEvents() as $event) {
-            $eventBus->dispatch($event);
+            $producer($event);
         }
 
         return $aggregateResult->state();

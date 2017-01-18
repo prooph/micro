@@ -2,7 +2,10 @@
 
 declare(strict_types = 1);
 
+use Prooph\Common\Messaging\Message;
+use Prooph\ServiceBus\Async\MessageProducer;
 use ProophExample\Micro\Infrastructure\InMemoryEmailGuard;
+use React\Promise\Deferred;
 
 $factories = [
     'eventStore' => function() {
@@ -21,8 +24,11 @@ $factories = [
             return self::$emailGuard;
         }
     },
-    'eventBus' => function() {
-        return new \Prooph\ServiceBus\EventBus();
+    'messageProducer' => new class() implements MessageProducer {
+        public function __invoke(Message $message, Deferred $deferred = null): void
+        {
+            return;
+        }
     },
 ];
 
