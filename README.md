@@ -5,7 +5,7 @@
 ## Installation
 
 ```bash
-php examples/register_and_change_username.php
+composer install
 ```
 
 ## Usage:
