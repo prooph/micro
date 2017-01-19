@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace ProophExample\Micro\Model\User;
+namespace Prooph\MicroExample\Model\User;
 
 use Prooph\Common\Messaging\Message;
 use Prooph\Micro\AggregateResult;
-use ProophExample\Micro\Model\Command\ChangeUserName;
-use ProophExample\Micro\Model\Command\RegisterUser;
-use ProophExample\Micro\Model\Event\UserNameWasChanged;
-use ProophExample\Micro\Model\Event\UserWasRegistered;
-use ProophExample\Micro\Model\Event\UserWasRegisteredWithDuplicateEmail;
-use ProophExample\Micro\Model\UniqueEmailGuard;
+use Prooph\MicroExample\Model\Command\ChangeUserName;
+use Prooph\MicroExample\Model\Command\RegisterUser;
+use Prooph\MicroExample\Model\Event\UserNameWasChanged;
+use Prooph\MicroExample\Model\Event\UserWasRegistered;
+use Prooph\MicroExample\Model\Event\UserWasRegisteredWithDuplicateEmail;
+use Prooph\MicroExample\Model\UniqueEmailGuard;
 
 function registerUser(array $state, RegisterUser $command, UniqueEmailGuard $guard): AggregateResult
 {

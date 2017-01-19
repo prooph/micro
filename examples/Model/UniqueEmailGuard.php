@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ProophExample\Micro\Model;
+namespace Prooph\MicroExample\Model;
 
 interface UniqueEmailGuard
 {

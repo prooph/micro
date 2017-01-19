@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ProophExample\Micro\Infrastructure;
+namespace Prooph\MicroExample\Infrastructure;
 
-use ProophExample\Micro\Model\UniqueEmailGuard;
+use Prooph\MicroExample\Model\UniqueEmailGuard;
 
 final class InMemoryEmailGuard implements UniqueEmailGuard
 {

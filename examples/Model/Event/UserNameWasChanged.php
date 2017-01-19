@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ProophExample\Micro\Model\Event;
+namespace Prooph\MicroExample\Model\Event;
 
 use Prooph\Common\Messaging\DomainEvent;
 use Prooph\Common\Messaging\PayloadConstructable;

@@ -14,8 +14,7 @@ use Prooph\MicroExample\Model\Command\UnknownCommand;
 
 $start = microtime(true);
 
-$autoloader = require __DIR__ . '/../vendor/autoload.php';
-$autoloader->addPsr4('Prooph\\MicroExample\\', __DIR__);
+require __DIR__ . '/../vendor/autoload.php';
 require 'Model/User.php';
 
 //We could also use a container here, if dependencies grow

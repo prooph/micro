@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ProophExample\Micro\Model\Command;
+namespace Prooph\MicroExample\Model\Command;
 
 use Prooph\Common\Messaging\Command;
 

@@ -26,12 +26,12 @@ use Prooph\Micro\Pipe;
  * [
  *     RegisterUser::class => [
  *         'handler' => function (array $state, Message $message) use (&$factories): AggregateResult {
- *             return \ProophExample\Micro\Model\User\registerUser($state, $message, $factories['emailGuard']());
+ *             return \Prooph\MicroExample\Model\User\registerUser($state, $message, $factories['emailGuard']());
  *         },
  *         'definition' => UserAggregateDefinition::class,
  *     ],
  *     ChangeUserName::class => [
- *         'handler' => '\ProophExample\Micro\Model\User\changeUserName',
+ *         'handler' => '\Prooph\MicroExample\Model\User\changeUserName',
  *         'definition' => UserAggregateDefinition::class,
  *     ],
  * ]

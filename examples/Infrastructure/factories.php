@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use Prooph\Common\Messaging\Message;
 use Prooph\ServiceBus\Async\MessageProducer;
-use ProophExample\Micro\Infrastructure\InMemoryEmailGuard;
+use Prooph\MicroExample\Infrastructure\InMemoryEmailGuard;
 use React\Promise\Deferred;
 
 return [
@@ -24,7 +24,7 @@ return [
             }
         };
     },
-    'emailGuard' => function (): \ProophExample\Micro\Model\UniqueEmailGuard {
+    'emailGuard' => function (): \Prooph\MicroExample\Model\UniqueEmailGuard {
         static $emailGuard = null;
 
         if (null === $emailGuard) {

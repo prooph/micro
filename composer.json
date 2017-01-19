@@ -1,8 +1,7 @@
 {
     "autoload": {
         "psr-4": {
-            "Prooph\\Micro\\": "src/",
-            "ProophExample\\Micro\\": "examples/"
+            "Prooph\\Micro\\": "src/"
         },
         "files": [
             "src/Kernel.php"
