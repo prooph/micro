@@ -26,7 +26,7 @@ class Pipe
      */
     private $failureCallback;
 
-    public function __construct($argument, callable $onFailure = null)
+    public function __construct($argument = null, callable $onFailure = null)
     {
         $this->argument = $argument;
         $this->failureCallback = $onFailure;
@@ -56,7 +56,11 @@ class Pipe
 
             if (null !== $this->failureCallback) {
                 $callback = $this->failureCallback;
-                $callback($result());
+                $result = $callback($result());
+
+                if (! $result instanceof Result) {
+                    $result = new Failure($result);
+                }
             }
         }
 

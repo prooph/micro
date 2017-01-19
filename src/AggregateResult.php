@@ -44,7 +44,7 @@ final class AggregateResult
 
     private static function assertEvent(Message $event)
     {
-        if (! $event->messageType() === Message::TYPE_EVENT) {
+        if ($event->messageType() !== Message::TYPE_EVENT) {
             throw new \InvalidArgumentException('Message has to be of type event. Got ' . $event->messageType());
         }
     }

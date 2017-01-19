@@ -11,8 +11,8 @@
 declare(strict_types=1);
 
 use Prooph\Common\Messaging\Message;
-use Prooph\ServiceBus\Async\MessageProducer;
 use Prooph\MicroExample\Infrastructure\InMemoryEmailGuard;
+use Prooph\ServiceBus\Async\MessageProducer;
 use React\Promise\Deferred;
 
 return [
