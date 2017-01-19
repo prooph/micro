@@ -11,8 +11,9 @@ use Prooph\Micro\AggregateResult;
 use Prooph\ServiceBus\Async\MessageProducer;
 use ProophExample\Micro\Infrastructure\UserAggregateDefinition;
 use ProophExample\Micro\Model\Command\ChangeUserName;
+use ProophExample\Micro\Model\Command\InvalidCommand;
 use ProophExample\Micro\Model\Command\RegisterUser;
-use Ramsey\Uuid\Uuid;
+use ProophExample\Micro\Model\Command\UnknownCommand;
 use React\Promise\Deferred;
 
 require __DIR__ . '/../vendor/autoload.php';
@@ -60,56 +61,12 @@ echo get_class($state) . "\n";
 echo "Username changed: \n";
 echo json_encode($state()) . "\n\n";
 
-$state = $dispatch(new class implements Message {
+$state = $dispatch(new InvalidCommand());
 
-    private $metadata = [];
+echo get_class($state) . "\n";
+echo json_encode($state()) . "\n\n";
 
-    public function messageName(): string
-    {
-        return 'invalid message';
-    }
-
-    public function messageType(): string
-    {
-        return Message::TYPE_EVENT;
-    }
-
-    public function uuid(): Uuid
-    {
-        return Uuid::uuid4();
-    }
-
-    public function createdAt(): DateTimeImmutable
-    {
-        return new DateTimeImmutable();
-    }
-
-    public function payload(): array
-    {
-        return [];
-    }
-
-    public function metadata(): array
-    {
-        return $this->metadata;
-    }
-
-    public function withMetadata(array $metadata): Message
-    {
-        $message = clone $this;
-        $message->metadata = $metadata;
-
-        return $message;
-    }
-
-    public function withAddedMetadata(string $key, $value): Message
-    {
-        $message = clone $this;
-        $message->metadata[$key] = $value;
-
-        return $message;
-    }
-});
+$state = $dispatch(new UnknownCommand());
 
 echo get_class($state) . "\n";
 echo json_encode($state()) . "\n\n";

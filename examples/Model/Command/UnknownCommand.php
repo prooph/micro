@@ -6,8 +6,10 @@ namespace ProophExample\Micro\Model\Command;
 
 use Prooph\Common\Messaging\Command;
 
-final class InvalidCommand extends Command
+final class UnknownCommand extends Command
 {
+    protected $messageName = 'unknown command';
+
     protected function setPayload(array $payload): void
     {
         // do nothing
