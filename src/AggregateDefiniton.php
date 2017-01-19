@@ -6,7 +6,6 @@ namespace Prooph\Micro;
 
 use Iterator;
 use Prooph\Common\Messaging\Message;
-use Prooph\EventSourcing\Aggregate\AggregateType;
 use Prooph\EventStore\Metadata\MetadataEnricher;
 use Prooph\EventStore\Metadata\MetadataMatcher;
 use Prooph\EventStore\StreamName;

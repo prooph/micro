@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ProophExample\Micro\Infrastructure;
 
 use Prooph\Common\Messaging\Message;
-use Prooph\EventSourcing\Aggregate\AggregateType;
 use Prooph\EventStore\StreamName;
 use Prooph\Micro\AbstractAggregateDefiniton;
 
