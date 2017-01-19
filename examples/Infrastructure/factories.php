@@ -8,9 +8,6 @@ use ProophExample\Micro\Infrastructure\InMemoryEmailGuard;
 use React\Promise\Deferred;
 
 $factories = [
-    'eventStore' => function () {
-        return new \Prooph\EventStore\InMemoryEventStore();
-    },
     'emailGuard' => new class() {
         private static $emailGuard;
 
@@ -21,11 +18,6 @@ $factories = [
             }
 
             return self::$emailGuard;
-        }
-    },
-    'messageProducer' => new class() implements MessageProducer {
-        public function __invoke(Message $message, Deferred $deferred = null): void
-        {
         }
     },
 ];

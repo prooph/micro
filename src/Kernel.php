@@ -14,36 +14,103 @@ use Prooph\EventStore\StreamName;
 use Prooph\Micro\AggregateDefiniton;
 use Prooph\Micro\AggregateResult;
 use Prooph\Micro\Pipe;
-use Prooph\ServiceBus\Async\MessageProducer;
 
-function dispatch(Message $message, array $commandMap, EventStore $eventStore, MessageProducer $producer): array
+/**
+ * builds a dispatcher to return a function that receives a messages and return the state
+ *
+ * usage:
+ * $factory = build($eventStore);
+ * $factory = build($producerFactory);
+ * $dispatch = $factory($commandMap);
+ * $state = $dispatch($message);
+ *
+ * or shorter:
+ * $dispatch = build($eventStore)($producerFactory)($commandMap);
+ * $state = $dispatch($message);
+ *
+ * $producerFactory is expected to be a callback that returns an instance of Prooph\ServiceBus\Async\MessageProducer.
+ * $commandMap is expected to be an array like this:
+ * [
+ *     RegisterUser::class => [
+ *         'handler' => function (array $state, Message $message) use (&$factories): AggregateResult {
+ *             return \ProophExample\Micro\Model\User\registerUser($state, $message, $factories['emailGuard']());
+ *         },
+ *         'definition' => UserAggregateDefinition::class,
+ *     ],
+ *     ChangeUserName::class => [
+ *         'handler' => '\ProophExample\Micro\Model\User\changeUserName',
+ *         'definition' => UserAggregateDefinition::class,
+ *     ],
+ * ]
+ * $message is expected to be an instance of Prooph\Common\Messaging\Message
+ */
+function build(EventStore $eventStore): callable
 {
-    $definition = getDefinition($message, $commandMap);
-    $aggregateId = extractAggregateId($message, $definition);
+    return function (callable $producerFactory) use ($eventStore) {
+        return function (array $commandMap) use ($producerFactory, $eventStore) {
+            return function (Message $message) use ($commandMap, $eventStore, $producerFactory) {
 
-    return (new Pipe())
-        ->pipe(loadEvents(
-            $definition->streamName($aggregateId),
-            $definition->metadataMatcher($aggregateId),
-            $eventStore
-        ))
-        ->pipe(function (Iterator $events) use ($definition): array {
-            return $definition->reconstituteState($events);
-        })
-        ->pipe(function (array $state) use ($message, $commandMap): AggregateResult {
-            $handler = getHandler($message, $commandMap);
+                $definitionCallback = function (Message $message) use ($commandMap): AggregateDefiniton {
+                    return getDefinition($message, $commandMap);
+                };
 
-            $aggregateResult = $handler($state, $message);
+                $loadStateCallback = function (AggregateDefiniton $definiton) use ($message): array {
+                    return loadState($message, $definiton);
+                };
 
-            if (! $aggregateResult instanceof AggregateResult) {
-                throw new \RuntimeException('Invalid aggregate result returned');
-            }
+                $loadEventsCallback = function (array $state) use ($message, $definitionCallback, $eventStore): Iterator {
+                    $definition = $definitionCallback($message);
+                    $aggregateId = $definition->extractAggregateId($message);
+                    return loadEvents(
+                        $definition->streamName($aggregateId),
+                        $definition->metadataMatcher($aggregateId),
+                        $eventStore
+                    );
+                };
 
-            return $aggregateResult;
-        })
-        ->pipe(persistEvents($eventStore, $definition, $aggregateId))
-        ->pipe(publishEvents($producer))
-        ->result();
+                $reconstituteStateCallback = function (Iterator $events) use ($message, $definitionCallback) {
+                    $definition = $definitionCallback($message);
+                    return $definition->reconstituteState($events);
+                };
+
+                $handlerCallback = function (array $state) use ($message, $commandMap): AggregateResult {
+                    $handler = getHandler($message, $commandMap);
+
+                    $aggregateResult = $handler($state, $message);
+
+                    if (! $aggregateResult instanceof AggregateResult) {
+                        throw new \RuntimeException('Invalid aggregate result returned');
+                    }
+
+                    return $aggregateResult;
+                };
+
+                $persistEventsCallback = function (AggregateResult $aggregateResult) use ($eventStore, $message, $definitionCallback): AggregateResult {
+                    $definition = $definitionCallback($message);
+                    return persistEvents($aggregateResult, $eventStore, $definition, $definition->extractAggregateId($message));
+                };
+
+                $publishEventsCallback = function(AggregateResult $aggregateResult) use ($producerFactory) {
+                    return publishEvents($aggregateResult, $producerFactory);
+                };
+
+                return (new Pipe($message))
+                    ->pipe($definitionCallback)
+                    ->pipe($loadStateCallback)
+                    ->pipe($loadEventsCallback)
+                    ->pipe($reconstituteStateCallback)
+                    ->pipe($handlerCallback)
+                    ->pipe($persistEventsCallback)
+                    ->pipe($publishEventsCallback)
+                    ->result();
+            };
+        };
+    };
+}
+
+function loadState(Message $message, AggregateDefiniton $definiton): array
+{
+    return []; // @todo: fetch from projections
 }
 
 function loadEvents(
@@ -52,76 +119,50 @@ function loadEvents(
     EventStore $eventStore,
     int $fromVersion = 1,
     array $state = []
-): callable {
-    return function () use ($streamName, $metadataMatcher, $eventStore, $fromVersion, $state): Iterator {
-        $streamExists = $eventStore->hasStream($streamName);
-
-        if ($streamExists) {
-            return $eventStore->load($streamName, $fromVersion, null, $metadataMatcher)->streamEvents();
-        }
-
-        return new ArrayIterator();
-    };
-}
-
-function persistEvents(EventStore $eventStore, AggregateDefiniton $definition, string $aggregateId): callable
-{
-    return function (AggregateResult $aggregateResult) use ($eventStore, $definition, $aggregateId): AggregateResult {
-        $events = $aggregateResult->raisedEvents();
-
-        if ($metadataEnricher = $definition->metadataEnricher($aggregateId)) {
-            $events = array_map([$metadataEnricher, 'enrich'], $events);
-        }
-
-        $streamName = $definition->streamName($aggregateId);
-
-        if ($eventStore->hasStream($streamName)) {
-            $eventStore->appendTo($streamName, new \ArrayIterator($events));
-        } else {
-            $eventStore->create(new Stream($streamName, new \ArrayIterator($events)));
-        }
-
-        return new AggregateResult($events, $aggregateResult->state());
-    };
-}
-
-function extractAggregateId(Message $message, AggregateDefiniton $aggregateDefiniton): string
-{
-    $idProperty = $aggregateDefiniton->identifierName();
-
-    if (! array_key_exists($idProperty, $message->payload())) {
-        throw new \RuntimeException(sprintf(
-            'Missing aggregate id %s in command payload of command %s. Payload was %s',
-            $idProperty,
-            $message->messageName(),
-            json_encode($message->payload())
-        ));
+): Iterator {
+    if ($eventStore->hasStream($streamName)) {
+        return $eventStore->load($streamName, $fromVersion, null, $metadataMatcher)->streamEvents();
     }
 
-    return $message->payload()[$idProperty];
+    return new ArrayIterator();
 }
 
-function publishEvents(MessageProducer $producer): callable
+function persistEvents(AggregateResult $aggregateResult, EventStore $eventStore, AggregateDefiniton $definition, string $aggregateId): AggregateResult
 {
-    return function (AggregateResult $aggregateResult) use ($producer): array {
-        foreach ($aggregateResult->raisedEvents() as $event) {
-            $producer($event);
-        }
+    $events = $aggregateResult->raisedEvents();
 
-        return $aggregateResult->state();
-    };
+    if ($metadataEnricher = $definition->metadataEnricher($aggregateId)) {
+        $events = array_map([$metadataEnricher, 'enrich'], $events);
+    }
+
+    $streamName = $definition->streamName($aggregateId);
+
+    if ($eventStore->hasStream($streamName)) {
+        $eventStore->appendTo($streamName, new \ArrayIterator($events));
+    } else {
+        $eventStore->create(new Stream($streamName, new \ArrayIterator($events)));
+    }
+
+    return new AggregateResult($events, $aggregateResult->state());
+}
+
+function publishEvents(AggregateResult $aggregateResult, callable $producerCallback): array
+{
+    $producer = null;
+    foreach ($aggregateResult->raisedEvents() as $event) {
+        if (null === $producer) {
+            $producer = $producerCallback();
+        }
+        $producer($event);
+    }
+
+    return $aggregateResult->state();
 }
 
 function getHandler(Message $message, array $commandMap): callable
 {
     if (! array_key_exists($message->messageName(), $commandMap)) {
-        //throw new \RuntimeException(sprintf("Unknown message %s. Message name not mapped to an aggregate.", $message->messageName()));
-
-        return function (Message $message, array $state): AggregateResult {
-            return new AggregateResult([], $state);
-        };
-
-        // @todo: short circuit pipe?
+        throw new \RuntimeException(sprintf("Unknown message %s. Message name not mapped to an aggregate.", $message->messageName()));
     }
 
     return $commandMap[$message->messageName()]['handler'];

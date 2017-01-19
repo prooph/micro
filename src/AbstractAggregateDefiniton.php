@@ -12,6 +12,27 @@ use Prooph\EventStore\Metadata\Operator;
 
 abstract class AbstractAggregateDefiniton implements AggregateDefiniton
 {
+    public function identifierName(): string
+    {
+        return 'id';
+    }
+
+    public function extractAggregateId(Message $message): string
+    {
+        $idProperty = $this->identifierName();
+
+        if (! array_key_exists($idProperty, $message->payload())) {
+            throw new \RuntimeException(sprintf(
+                'Missing aggregate id %s in command payload of command %s. Payload was %s',
+                $idProperty,
+                $message->messageName(),
+                json_encode($message->payload())
+            ));
+        }
+
+        return $message->payload()[$idProperty];
+    }
+
     public function metadataMatcher(string $aggregateId): ?MetadataMatcher
     {
         return (new MetadataMatcher())->withMetadataMatch('_aggregate_id', Operator::EQUALS(), $aggregateId);

@@ -15,7 +15,7 @@ interface AggregateDefiniton
 {
     public function identifierName(): string;
 
-    public function aggregateType(): AggregateType;
+    public function extractAggregateId(Message $message): string;
 
     public function streamName(string $aggregateId): StreamName;
 

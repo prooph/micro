@@ -16,16 +16,6 @@ final class UserAggregateDefinition extends AbstractAggregateDefiniton
         return new StreamName('user_stream'); // add aggregate id for one stream per aggregate
     }
 
-    public function aggregateType(): AggregateType
-    {
-        return AggregateType::fromString('user');
-    }
-
-    public function identifierName(): string
-    {
-        return 'id';
-    }
-
     public function apply(array $state, Message ...$events): array
     {
         return \ProophExample\Micro\Model\User\apply($state, ...$events);
