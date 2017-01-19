@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ProophExample\Micro\Script;
 
-use DateTimeImmutable;
 use Prooph\Common\Messaging\Message;
 use Prooph\EventStore\InMemoryEventStore;
 use Prooph\Micro\AggregateResult;
@@ -16,6 +15,8 @@ use ProophExample\Micro\Model\Command\RegisterUser;
 use ProophExample\Micro\Model\Command\UnknownCommand;
 use React\Promise\Deferred;
 
+$start = microtime(true);
+
 require __DIR__ . '/../vendor/autoload.php';
 require 'Model/User.php';
 
@@ -24,7 +25,7 @@ $factories = include 'Infrastructure/factories.php';
 
 $eventStore = new InMemoryEventStore();
 
-$producer = function() {
+$producer = function(): MessageProducer {
     return new class() implements MessageProducer {
         public function __invoke(Message $message, Deferred $deferred = null): void
         {
@@ -45,7 +46,7 @@ $commandMap = [
     ],
 ];
 
-$dispatch = \Prooph\Micro\Kernel\build($eventStore)($producer)($commandMap);
+$dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStore, $producer, $commandMap);
 
 $command = new RegisterUser(['id' => '1', 'name' => 'Alex', 'email' => 'member@getprooph.org']);
 
@@ -70,3 +71,7 @@ $state = $dispatch(new UnknownCommand());
 
 echo get_class($state) . "\n";
 echo json_encode($state()) . "\n\n";
+
+$time = microtime(true) - $start;
+
+echo $time . "secs runtime\n\n";
