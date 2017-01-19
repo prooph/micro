@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types = 1);
+declare(strict_types=1);
 
 namespace ProophExample\Micro\Infrastructure;
 
@@ -12,7 +12,7 @@ final class InMemoryEmailGuard implements UniqueEmailGuard
 
     public function isUnique(string $email): bool
     {
-        $isUnique = !in_array($email, $this->knownEmails);
+        $isUnique = ! in_array($email, $this->knownEmails);
 
         if ($isUnique) {
             $this->knownEmails[] = $email;

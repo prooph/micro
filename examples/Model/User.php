@@ -1,18 +1,11 @@
 <?php
-declare(strict_types = 1);
+
+declare(strict_types=1);
 
 namespace ProophExample\Micro\Model\User;
 
-use Iterator;
 use Prooph\Common\Messaging\Message;
-use Prooph\EventStore\Metadata\MetadataEnricher;
-use Prooph\EventStore\Metadata\MetadataMatcher;
-use Prooph\EventStore\Metadata\Operator;
-use Prooph\EventStore\StreamName;
 use Prooph\Micro\AggregateResult;
-use Prooph\Micro\Fn;
-use Prooph\Micro\FunctionalAggregate;
-use Prooph\Micro\StreamMatcher;
 use ProophExample\Micro\Model\Command\ChangeUserName;
 use ProophExample\Micro\Model\Command\RegisterUser;
 use ProophExample\Micro\Model\Event\UserNameWasChanged;
@@ -20,7 +13,7 @@ use ProophExample\Micro\Model\Event\UserWasRegistered;
 use ProophExample\Micro\Model\Event\UserWasRegisteredWithDuplicateEmail;
 use ProophExample\Micro\Model\UniqueEmailGuard;
 
-function registerUser(RegisterUser $command, array $state, UniqueEmailGuard $guard): AggregateResult
+function registerUser(array $state, RegisterUser $command, UniqueEmailGuard $guard): AggregateResult
 {
     if ($guard->isUnique($command->email())) {
         $event = new UserWasRegistered($command->payload());
@@ -31,9 +24,9 @@ function registerUser(RegisterUser $command, array $state, UniqueEmailGuard $gua
     return new AggregateResult([$event], apply($state, $event));
 }
 
-function changeUserName(ChangeUserName $command, array $state): AggregateResult
+function changeUserName(array $state, ChangeUserName $command): AggregateResult
 {
-    if(!mb_strlen($command->username()) > 3) {
+    if (! mb_strlen($command->username()) > 3) {
         throw new \InvalidArgumentException('Username too short');
     }
 

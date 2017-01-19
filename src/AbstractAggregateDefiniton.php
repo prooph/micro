@@ -20,7 +20,6 @@ abstract class AbstractAggregateDefiniton implements AggregateDefiniton
     public function metadataEnricher(string $aggregateId): ?MetadataEnricher
     {
         return new class($aggregateId) implements MetadataEnricher {
-
             private $id;
 
             public function __construct(string $id)

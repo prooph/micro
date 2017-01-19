@@ -15,7 +15,6 @@ use Prooph\Micro\AggregateDefiniton;
 use Prooph\Micro\AggregateResult;
 use Prooph\Micro\Pipe;
 use Prooph\ServiceBus\Async\MessageProducer;
-use Prooph\ServiceBus\EventBus;
 
 function dispatch(Message $message, array $commandMap, EventStore $eventStore, MessageProducer $producer): array
 {
@@ -34,7 +33,7 @@ function dispatch(Message $message, array $commandMap, EventStore $eventStore, M
         ->pipe(function (array $state) use ($message, $commandMap): AggregateResult {
             $handler = getHandler($message, $commandMap);
 
-            $aggregateResult = $handler($message, $state);
+            $aggregateResult = $handler($state, $message);
 
             if (! $aggregateResult instanceof AggregateResult) {
                 throw new \RuntimeException('Invalid aggregate result returned');
@@ -92,7 +91,7 @@ function extractAggregateId(Message $message, AggregateDefiniton $aggregateDefin
 
     if (! array_key_exists($idProperty, $message->payload())) {
         throw new \RuntimeException(sprintf(
-            "Missing aggregate id %s in command payload of command %s. Payload was %s",
+            'Missing aggregate id %s in command payload of command %s. Payload was %s',
             $idProperty,
             $message->messageName(),
             json_encode($message->payload())
@@ -131,8 +130,8 @@ function getHandler(Message $message, array $commandMap): callable
 function getDefinition(Message $message, array $commandMap): AggregateDefiniton
 {
     if (! array_key_exists($message->messageName(), $commandMap)) {
-        throw new \RuntimeException(sprintf("Unknown message %s. Message name not mapped to an aggregate.", $message->messageName()));
+        throw new \RuntimeException(sprintf('Unknown message %s. Message name not mapped to an aggregate.', $message->messageName()));
     }
 
-    return new $commandMap[$message->messageName()]['definition'];
+    return new $commandMap[$message->messageName()]['definition']();
 }

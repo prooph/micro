@@ -5,8 +5,7 @@
             "ProophExample\\Micro\\": "examples/"
         },
         "files": [
-            "src/Kernel.php",
-            "examples/Model/User.php"
+            "src/Kernel.php"
         ]
     },
     "require": {
@@ -15,6 +14,21 @@
         "react/promise" : "^2.5.0",
         "prooph/event-store": "7.0.x-dev",
         "prooph/pdo-event-store": "dev-master",
+        "prooph/php-cs-fixer-config": "^0.1.1",
         "beberlei/assert": "^2.7"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^5.7",
+        "satooshi/php-coveralls": "^1.0",
+        "malukenho/docheader": "^0.1.4"
+    },
+    "scripts": {
+        "check": [
+            "@cs",
+            "@test"
+        ],
+        "cs": "php-cs-fixer fix -v --diff --dry-run",
+        "cs-fix": "php-cs-fixer fix -v --diff",
+        "test": "phpunit"
     }
 }
