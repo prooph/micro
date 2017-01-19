@@ -29,16 +29,18 @@ abstract class AbstractAggregateDefiniton implements AggregateDefiniton
     {
         $idProperty = $this->identifierName();
 
-        if (! array_key_exists($idProperty, $message->payload())) {
+        $payload = $message->payload();
+
+        if (! array_key_exists($idProperty, $payload)) {
             throw new \RuntimeException(sprintf(
                 'Missing aggregate id %s in command payload of command %s. Payload was %s',
                 $idProperty,
                 $message->messageName(),
-                json_encode($message->payload())
+                json_encode($payload)
             ));
         }
 
-        return $message->payload()[$idProperty];
+        return $payload[$idProperty];
     }
 
     public function metadataMatcher(string $aggregateId): ?MetadataMatcher
