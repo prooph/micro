@@ -59,7 +59,7 @@ class KernelTest extends TestCase
             };
         };
 
-        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStoreFactory, $producerFactory, $commandMap);
+        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStoreFactory, $commandMap, $producerFactory);
 
         $command = $this->prophesize(Message::class);
         $command->messageName()->willReturn('some_command')->shouldBeCalled();
@@ -67,6 +67,62 @@ class KernelTest extends TestCase
         $result = $dispatch($command->reveal());
 
         $this->assertEquals(['some' => 'state'], $result);
+    }
+
+    /**
+     * @test
+     */
+    public function it_builds_command_dispatcher_and_dispatches_with_transactional_publishing(): void
+    {
+        $commandMap = [
+            'some_command' => [
+                'handler' => function (array $state, Message $message): AggregateResult {
+                    return new AggregateResult([], ['some' => 'state']);
+                },
+                'definition' => TestAggregateDefinition::class,
+            ],
+        ];
+
+        $eventStoreFactory = function (): EventStore {
+            static $eventStore = null;
+
+            if (null === $eventStore) {
+                $eventStore = $this->prophesize(EventStore::class);
+                $eventStore->hasStream('foo')->willReturn(true)->shouldBeCalled();
+                $eventStore->load(Argument::type(StreamName::class), 1, null, null)->willReturn(new Stream(new StreamName('foo'), new \ArrayIterator()))->shouldBeCalled();
+                $eventStore->appendTo(Argument::type(StreamName::class), Argument::type(\Iterator::class))->shouldBeCalled();
+                $eventStore = $eventStore->reveal();
+            }
+
+            return $eventStore;
+        };
+
+        $producerFactory = function () {
+            return function (Message $message): void {
+            };
+        };
+
+        $started = false;
+        $commited = false;
+
+        $start = function () use (&$started) {
+            $started = true;
+        };
+
+        $commit = function () use (&$commited) {
+            $commited = true;
+        };
+
+        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStoreFactory, $commandMap, $producerFactory, $start, $commit);
+
+        $command = $this->prophesize(Message::class);
+        $command->messageName()->willReturn('some_command')->shouldBeCalled();
+
+        $result = $dispatch($command->reveal());
+
+        $this->assertEquals(['some' => 'state'], $result);
+        $this->assertTrue($started);
+        $this->assertTrue($commited);
     }
 
     /**
@@ -101,7 +157,7 @@ class KernelTest extends TestCase
             };
         };
 
-        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStoreFactory, $producerFactory, $commandMap);
+        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStoreFactory, $commandMap, $producerFactory);
 
         $command = $this->prophesize(Message::class);
         $command->messageName()->willReturn('some_command')->shouldBeCalled();
