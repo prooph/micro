@@ -18,7 +18,7 @@ use Prooph\Common\Messaging\MessageDataAssertion;
 
 const buildPublisher = 'Prooph\Micro\AmqpProducer\buildPublisher';
 
-function buildPublisher (\AMQPChannel $channel, MessageConverter $messageConverter, string $exchangeName): callable
+function buildPublisher(\AMQPChannel $channel, MessageConverter $messageConverter, string $exchangeName): callable
 {
     if (! $channel->isConnected()) {
         throw new \RuntimeException('Provided AMQP channel is not connected');
@@ -28,13 +28,20 @@ function buildPublisher (\AMQPChannel $channel, MessageConverter $messageConvert
     $exchange->setName($exchangeName);
 
     return function (Message $message) use ($messageConverter, $exchange) {
-        $messageData = $this->messageConverter->convertToArray($message);
+        $messageData = $messageConverter->convertToArray($message);
         MessageDataAssertion::assert($messageData);
         $messageData['created_at'] = $message->createdAt()->format('Y-m-d\TH:i:s.u');
 
-        $exchange->publish($messageData, $message->messageName(), \AMQP_NOPARAM, [
+        $exchange->publish(json_encode($messageData), $message->messageName(), \AMQP_NOPARAM, [
             'timestamp' => $message->createdAt()->getTimestamp(),
             'type' => $message->messageType(),
         ]);
     };
+}
+
+const throwCommitFailed = 'Prooph\Micro\AmqpPublisher\throwCommitFailed';
+
+function throwCommitFailed(): void
+{
+    throw new \RuntimeException('AMQP transaction failed');
 }
