@@ -12,8 +12,6 @@ declare(strict_types=1);
 
 use Prooph\Common\Messaging\Message;
 use Prooph\MicroExample\Infrastructure\InMemoryEmailGuard;
-use Prooph\ServiceBus\Async\MessageProducer;
-use React\Promise\Deferred;
 
 return [
     'eventStore' => function (): \Prooph\EventStore\EventStore {
@@ -26,10 +24,7 @@ return [
         return $eventStore;
     },
     'producer' => function () {
-        return new class() implements MessageProducer {
-            public function __invoke(Message $message, Deferred $deferred = null): void
-            {
-            }
+        return function (Message $message) {
         };
     },
     'emailGuard' => function (): \Prooph\MicroExample\Model\UniqueEmailGuard {
