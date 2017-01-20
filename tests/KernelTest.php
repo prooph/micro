@@ -20,7 +20,6 @@ use Prooph\EventStore\Stream;
 use Prooph\EventStore\StreamName;
 use Prooph\Micro\AggregateDefiniton;
 use Prooph\Micro\AggregateResult;
-use Prooph\Micro\Failure;
 use Prooph\Micro\Kernel as f;
 use ProophTest\Micro\TestAsset\TestAggregateDefinition;
 use Prophecy\Argument;
@@ -67,7 +66,7 @@ class KernelTest extends TestCase
 
         $result = $dispatch($command->reveal());
 
-        $this->assertEquals(['some' => 'state'], $result());
+        $this->assertEquals(['some' => 'state'], $result);
     }
 
     /**
@@ -109,8 +108,8 @@ class KernelTest extends TestCase
 
         $result = $dispatch($command->reveal());
 
-        $this->assertInstanceOf(Failure::class, $result);
-        $this->assertEquals('Invalid aggregate result returned', $result());
+        $this->assertInstanceOf(\Exception::class, $result);
+        $this->assertEquals('Invalid aggregate result returned', $result->getMessage());
     }
 
     /**
@@ -261,7 +260,7 @@ class KernelTest extends TestCase
 
         $result = f\publishEvents($aggregateResult, $factory);
 
-        $this->assertEquals(['foo' => 'bar'], $result);
+        $this->assertSame($aggregateResult, $result);
     }
 
     /**
@@ -328,5 +327,28 @@ class KernelTest extends TestCase
         $commandMap = [];
 
         f\getAggregateDefinition($message->reveal(), $commandMap);
+    }
+
+    /**
+     * @test
+     */
+    public function it_pipes(): void
+    {
+        $result = f\pipleline('strtolower', 'ucfirst')('aBC');
+
+        $this->assertEquals('Abc', $result);
+    }
+
+    /**
+     * @test
+     */
+    public function it_handles_exceptions(): void
+    {
+        $result = f\pipleline(function () {
+            throw new \Exception('Exception there!');
+        }, 'ucfirst')('aBC');
+
+        $this->assertInstanceOf(\Exception::class, $result);
+        $this->assertEquals('Exception there!', $result->getMessage());
     }
 }

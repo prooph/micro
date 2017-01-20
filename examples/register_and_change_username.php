@@ -48,25 +48,23 @@ $command = new RegisterUser(['id' => '1', 'name' => 'Alex', 'email' => 'member@g
 
 $state = $dispatch($command);
 
-echo get_class($state) . "\n";
 echo "User was registered: \n";
-echo json_encode($state()) . "\n\n";
+echo json_encode($state) . "\n\n";
 
 $state = $dispatch(new ChangeUserName(['id' => '1', 'name' => 'Sascha']));
 
-echo get_class($state) . "\n";
 echo "Username changed: \n";
-echo json_encode($state()) . "\n\n";
+echo json_encode($state) . "\n\n";
 
 $state = $dispatch(new InvalidCommand());
 
 echo get_class($state) . "\n";
-echo json_encode($state()) . "\n\n";
+echo json_encode($state->getMessage()) . "\n\n";
 
 $state = $dispatch(new UnknownCommand());
 
 echo get_class($state) . "\n";
-echo json_encode($state()) . "\n\n";
+echo json_encode($state->getMessage()) . "\n\n";
 
 $time = microtime(true) - $start;
 

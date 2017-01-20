@@ -20,7 +20,8 @@ use Prooph\EventStore\Stream;
 use Prooph\EventStore\StreamName;
 use Prooph\Micro\AggregateDefiniton;
 use Prooph\Micro\AggregateResult;
-use Prooph\Micro\Pipe;
+
+const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
 
 /**
  * builds a dispatcher to return a function that receives a messages and return the state
@@ -67,7 +68,7 @@ function buildCommandDispatcher(callable $eventStoreFactory, callable $producerF
             );
         };
 
-        $reconstituteState = function (Iterator $events) use ($message, $getDefinition) {
+        $reconstituteState = function (Iterator $events) use ($message, $getDefinition): array {
             $definition = $getDefinition($message);
 
             return $definition->reconstituteState($events);
@@ -91,26 +92,50 @@ function buildCommandDispatcher(callable $eventStoreFactory, callable $producerF
             return persistEvents($aggregateResult, $eventStoreFactory, $definition, $definition->extractAggregateId($message));
         };
 
-        $publishEvents = function (AggregateResult $aggregateResult) use ($producerFactory) {
+        $publishEvents = function (AggregateResult $aggregateResult) use ($producerFactory): AggregateResult {
             return publishEvents($aggregateResult, $producerFactory);
         };
 
-        return (new Pipe($message))
-            ->pipe($getDefinition)
-            ->pipe($loadState)
-            ->pipe($loadEvents)
-            ->pipe($reconstituteState)
-            ->pipe($handleCommand)
-            ->pipe($persistEvents)
-            ->pipe($publishEvents)
-            ->result();
+        return pipleline(
+            $getDefinition,
+            $loadState,
+            $loadEvents,
+            $reconstituteState,
+            $handleCommand,
+            $persistEvents,
+            $publishEvents,
+            aggregateState
+        )($message);
     };
 }
+
+const pipeline = 'Prooph\Micro\Kernel\pipeline';
+
+function pipleline(callable $firstCallback, callable ...$callbacks): callable
+{
+    array_unshift($callbacks, $firstCallback);
+
+    return function ($value = null) use ($callbacks) {
+        try {
+            $result = array_reduce($callbacks, function ($accumulator, callable $callback) {
+                return $callback($accumulator);
+            }, $value);
+        } catch (\Throwable $e) {
+            return $e;
+        }
+
+        return $result;
+    };
+}
+
+const loadState = 'Prooph\Micro\Kernel\loadState';
 
 function loadState(Message $message, AggregateDefiniton $definiton): array
 {
     return []; // @todo: fetch from projections
 }
+
+const loadEvents = 'Prooph\Micro\Kernel\loadEvents';
 
 function loadEvents(
     StreamName $streamName,
@@ -127,6 +152,8 @@ function loadEvents(
 
     return new ArrayIterator();
 }
+
+const persistEvents = 'Prooph\Micro\Kernel\persistEvents';
 
 function persistEvents(AggregateResult $aggregateResult, callable $eventStoreFactory, AggregateDefiniton $definition, string $aggregateId): AggregateResult
 {
@@ -149,7 +176,9 @@ function persistEvents(AggregateResult $aggregateResult, callable $eventStoreFac
     return new AggregateResult($events, $aggregateResult->state());
 }
 
-function publishEvents(AggregateResult $aggregateResult, callable $producerCallback): array
+const publishEvents = 'Prooph\Micro\Kernel\publishEvents';
+
+function publishEvents(AggregateResult $aggregateResult, callable $producerCallback): AggregateResult
 {
     $producer = null;
     foreach ($aggregateResult->raisedEvents() as $event) {
@@ -159,8 +188,17 @@ function publishEvents(AggregateResult $aggregateResult, callable $producerCallb
         $producer($event);
     }
 
+    return $aggregateResult;
+}
+
+const aggregateState = 'Prooph\Micro\Kernel\aggregateState';
+
+function aggregateState(AggregateResult $aggregateResult): array
+{
     return $aggregateResult->state();
 }
+
+const getHandler = 'Prooph\Micro\Kernel\getHandler';
 
 function getHandler(Message $message, array $commandMap): callable
 {
@@ -170,6 +208,8 @@ function getHandler(Message $message, array $commandMap): callable
 
     return $commandMap[$message->messageName()]['handler'];
 }
+
+const getAggregateDefinition = 'Prooph\Micro\Kernel\getAggregateDefinition';
 
 function getAggregateDefinition(Message $message, array $commandMap): AggregateDefiniton
 {
