@@ -92,7 +92,7 @@ function buildCommandDispatcher(callable $eventStoreFactory, callable $producerF
             return persistEvents($aggregateResult, $eventStoreFactory, $definition, $definition->extractAggregateId($message));
         };
 
-        $publishEvents = function (AggregateResult $aggregateResult) use ($producerFactory): array {
+        $publishEvents = function (AggregateResult $aggregateResult) use ($producerFactory): AggregateResult {
             return publishEvents($aggregateResult, $producerFactory);
         };
 
@@ -152,7 +152,6 @@ function loadEvents(
 
     return new ArrayIterator();
 }
-
 
 const persistEvents = 'Prooph\Micro\Kernel\persistEvents';
 
