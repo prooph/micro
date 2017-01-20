@@ -23,11 +23,11 @@ $factories = [
 
         return $eventStore;
     },
-    'producer' => function () {
+    'producer' => function (): callable {
         return function (Message $message): void {
         };
     },
-    'amqpChannel' => function () {
+    'amqpChannel' => function (): \AMQPChannel {
         static $channel = null;
 
         if (null === $channel) {
@@ -50,7 +50,7 @@ $factories = [
     },
 ];
 
-$factories['amqpProducer'] = function () use ($factories) {
+$factories['amqpProducer'] = function () use ($factories): callable {
     return \Prooph\Micro\AmqpPublisher\buildPublisher(
         $factories['amqpChannel'](),
         new \Prooph\Common\Messaging\NoOpMessageConverter(),
@@ -58,15 +58,15 @@ $factories['amqpProducer'] = function () use ($factories) {
     );
 };
 
-$factories['startAmqpTransaction'] = function () use ($factories) {
-    return function () use ($factories) {
+$factories['startAmqpTransaction'] = function () use ($factories): callable {
+    return function () use ($factories): void {
         $channel = $factories['amqpChannel']();
         $channel->startTransaction();
     };
 };
 
-$factories['commitAmqpTransaction'] = function () use ($factories) {
-    return function () use ($factories) {
+$factories['commitAmqpTransaction'] = function () use ($factories): callable {
+    return function () use ($factories): void {
         $channel = $factories['amqpChannel']();
         $result = $channel->commitTransaction();
 
