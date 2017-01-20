@@ -23,7 +23,7 @@ final class AggregateResult
     public function __construct(array $raisedEvents, array $state)
     {
         foreach ($raisedEvents as $event) {
-            self::assertEvent($event);
+            $this->assertEvent($event);
         }
         $this->raisedEvents = $raisedEvents;
         $this->state = $state;
@@ -42,7 +42,7 @@ final class AggregateResult
         return $this->state;
     }
 
-    private static function assertEvent(Message $event)
+    private function assertEvent(Message $event)
     {
         if ($event->messageType() !== Message::TYPE_EVENT) {
             throw new \InvalidArgumentException('Message has to be of type event. Got ' . $event->messageType());
