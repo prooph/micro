@@ -42,7 +42,20 @@ $commandMap = [
     ],
 ];
 
-$dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($factories['eventStore'], $factories['producer'], $commandMap);
+$dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher(
+    $factories['eventStore'],
+    $commandMap,
+    $factories['producer']
+);
+
+// uncomment to enable amqp publisher
+//$dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher(
+//    $factories['eventStore'],
+//    $commandMap,
+//    $factories['amqpProducer'],
+//    $factories['startAmqpTransaction'],
+//    $factories['commitAmqpTransaction']
+//);
 
 $command = new RegisterUser(['id' => '1', 'name' => 'Alex', 'email' => 'member@getprooph.org']);
 

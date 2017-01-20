@@ -27,7 +27,7 @@ const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
  * builds a dispatcher to return a function that receives a messages and return the state
  *
  * usage:
- * $dispatch = buildDispatcher($eventStore, $producerFactory, $commandMap);
+ * $dispatch = buildDispatcher($eventStore, $commandMap, $producerFactory);
  * $state = $dispatch($message);
  *
  * $producerFactory is expected to be a callback that returns an instance of Prooph\ServiceBus\Async\MessageProducer.
@@ -46,9 +46,20 @@ const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
  * ]
  * $message is expected to be an instance of Prooph\Common\Messaging\Message
  */
-function buildCommandDispatcher(callable $eventStoreFactory, callable $producerFactory, array $commandMap): callable
-{
-    return function (Message $message) use ($eventStoreFactory, $producerFactory, $commandMap) {
+function buildCommandDispatcher(
+    callable $eventStoreFactory,
+    array $commandMap,
+    callable $producerFactory,
+    callable $startProducerTransaction = null,
+    callable $commitProducerTransaction = null
+): callable {
+    return function (Message $message) use (
+        $eventStoreFactory,
+        $commandMap,
+        $producerFactory,
+        $startProducerTransaction,
+        $commitProducerTransaction
+    ) {
         $getDefinition = function (Message $message) use ($commandMap): AggregateDefiniton {
             return getAggregateDefinition($message, $commandMap);
         };
@@ -92,8 +103,12 @@ function buildCommandDispatcher(callable $eventStoreFactory, callable $producerF
             return persistEvents($aggregateResult, $eventStoreFactory, $definition, $definition->extractAggregateId($message));
         };
 
-        $publishEvents = function (AggregateResult $aggregateResult) use ($producerFactory): AggregateResult {
-            return publishEvents($aggregateResult, $producerFactory);
+        $publishEvents = function (AggregateResult $aggregateResult) use (
+            $producerFactory,
+            $startProducerTransaction,
+            $commitProducerTransaction
+        ): AggregateResult {
+            return publishEvents($aggregateResult, $producerFactory, $startProducerTransaction, $commitProducerTransaction);
         };
 
         return pipleline(
@@ -178,14 +193,29 @@ function persistEvents(AggregateResult $aggregateResult, callable $eventStoreFac
 
 const publishEvents = 'Prooph\Micro\Kernel\publishEvents';
 
-function publishEvents(AggregateResult $aggregateResult, callable $producerCallback): AggregateResult
-{
+function publishEvents(
+    AggregateResult $aggregateResult,
+    callable $producerCallback,
+    callable $startProducerTransaction = null,
+    callable $commitProducerTransaction = null
+): AggregateResult {
     $producer = null;
+    $commit = false;
+
+    if (null !== $startProducerTransaction && null !== $commitProducerTransaction) {
+        $commit = true;
+        $startProducerTransaction();
+    }
+
     foreach ($aggregateResult->raisedEvents() as $event) {
         if (null === $producer) {
             $producer = $producerCallback();
         }
         $producer($event);
+    }
+
+    if ($commit) {
+        $commitProducerTransaction();
     }
 
     return $aggregateResult;

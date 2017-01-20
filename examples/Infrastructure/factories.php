@@ -13,7 +13,7 @@ declare(strict_types=1);
 use Prooph\Common\Messaging\Message;
 use Prooph\MicroExample\Infrastructure\InMemoryEmailGuard;
 
-return [
+$factories = [
     'eventStore' => function (): \Prooph\EventStore\EventStore {
         static $eventStore = null;
 
@@ -23,9 +23,21 @@ return [
 
         return $eventStore;
     },
-    'producer' => function () {
-        return function (Message $message) {
+    'producer' => function (): callable {
+        return function (Message $message): void {
         };
+    },
+    'amqpChannel' => function (): \AMQPChannel {
+        static $channel = null;
+
+        if (null === $channel) {
+            $connection = new \AMQPConnection();
+            $connection->connect();
+
+            $channel = new \AMQPChannel($connection);
+        }
+
+        return $channel;
     },
     'emailGuard' => function (): \Prooph\MicroExample\Model\UniqueEmailGuard {
         static $emailGuard = null;
@@ -37,3 +49,31 @@ return [
         return $emailGuard;
     },
 ];
+
+$factories['amqpProducer'] = function () use ($factories): callable {
+    return \Prooph\Micro\AmqpPublisher\buildPublisher(
+        $factories['amqpChannel'](),
+        new \Prooph\Common\Messaging\NoOpMessageConverter(),
+        'micro'
+    );
+};
+
+$factories['startAmqpTransaction'] = function () use ($factories): callable {
+    return function () use ($factories): void {
+        $channel = $factories['amqpChannel']();
+        $channel->startTransaction();
+    };
+};
+
+$factories['commitAmqpTransaction'] = function () use ($factories): callable {
+    return function () use ($factories): void {
+        $channel = $factories['amqpChannel']();
+        $result = $channel->commitTransaction();
+
+        if (false === $result) {
+            \Prooph\Micro\AmqpPublisher\throwCommitFailed();
+        }
+    };
+};
+
+return $factories;
