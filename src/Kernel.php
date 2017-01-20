@@ -111,13 +111,13 @@ function buildCommandDispatcher(callable $eventStoreFactory, callable $producerF
 
 const pipeline = 'Prooph\Micro\Kernel\pipeline';
 
-function pipleline(callable $firstCallback, callable ...$secondCallback): callable
+function pipleline(callable $firstCallback, callable ...$callbacks): callable
 {
-    array_unshift($secondCallback, $firstCallback);
+    array_unshift($callbacks, $firstCallback);
 
-    return function ($value = null) use ($firstCallback, $secondCallback) {
+    return function ($value = null) use ($callbacks) {
         try {
-            $result = array_reduce($secondCallback, function ($accumulator, callable $callback) {
+            $result = array_reduce($callbacks, function ($accumulator, callable $callback) {
                 return $callback($accumulator);
             }, $value);
         } catch (\Throwable $e) {

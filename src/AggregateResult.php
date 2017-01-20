@@ -42,7 +42,7 @@ final class AggregateResult
         return $this->state;
     }
 
-    private function assertEvent(Message $event)
+    private function assertEvent(Message $event): void
     {
         if ($event->messageType() !== Message::TYPE_EVENT) {
             throw new \InvalidArgumentException('Message has to be of type event. Got ' . $event->messageType());
