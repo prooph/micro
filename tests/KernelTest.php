@@ -21,6 +21,9 @@ use Prooph\EventStore\StreamName;
 use Prooph\Micro\AggregateDefiniton;
 use Prooph\Micro\AggregateResult;
 use Prooph\Micro\Kernel as f;
+use Prooph\SnapshotStore\InMemorySnapshotStore;
+use Prooph\SnapshotStore\Snapshot;
+use Prooph\SnapshotStore\SnapshotStore;
 use ProophTest\Micro\TestAsset\TestAggregateDefinition;
 use Prophecy\Argument;
 
@@ -54,12 +57,22 @@ class KernelTest extends TestCase
             return $eventStore;
         };
 
+        $snapshotStoreFactory = function (): SnapshotStore {
+            static $snapshotStore = null;
+
+            if (null === $snapshotStore) {
+                $snapshotStore = new InMemorySnapshotStore();
+            }
+
+            return $snapshotStore;
+        };
+
         $producerFactory = function () {
             return function (Message $message): void {
             };
         };
 
-        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStoreFactory, $commandMap, $producerFactory);
+        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStoreFactory, $snapshotStoreFactory, $commandMap, $producerFactory);
 
         $command = $this->prophesize(Message::class);
         $command->messageName()->willReturn('some_command')->shouldBeCalled();
@@ -97,6 +110,16 @@ class KernelTest extends TestCase
             return $eventStore;
         };
 
+        $snapshotStoreFactory = function (): SnapshotStore {
+            static $snapshotStore = null;
+
+            if (null === $snapshotStore) {
+                $snapshotStore = new InMemorySnapshotStore();
+            }
+
+            return $snapshotStore;
+        };
+
         $producerFactory = function () {
             return function (Message $message): void {
             };
@@ -113,7 +136,7 @@ class KernelTest extends TestCase
             $commited = true;
         };
 
-        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStoreFactory, $commandMap, $producerFactory, $start, $commit);
+        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStoreFactory, $snapshotStoreFactory, $commandMap, $producerFactory, $start, $commit);
 
         $command = $this->prophesize(Message::class);
         $command->messageName()->willReturn('some_command')->shouldBeCalled();
@@ -152,12 +175,22 @@ class KernelTest extends TestCase
             return $eventStore;
         };
 
+        $snapshotStoreFactory = function (): SnapshotStore {
+            static $snapshotStore = null;
+
+            if (null === $snapshotStore) {
+                $snapshotStore = new InMemorySnapshotStore();
+            }
+
+            return $snapshotStore;
+        };
+
         $producerFactory = function (): callable {
             return function (Message $message): void {
             };
         };
 
-        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStoreFactory, $commandMap, $producerFactory);
+        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStoreFactory, $snapshotStoreFactory, $commandMap, $producerFactory);
 
         $command = $this->prophesize(Message::class);
         $command->messageName()->willReturn('some_command')->shouldBeCalled();
@@ -171,14 +204,45 @@ class KernelTest extends TestCase
     /**
      * @test
      */
-    public function it_loads_empty_state(): void
+    public function it_loads_state_from_empty_snapshot_store(): void
     {
-        $message = $this->prophesize(Message::class);
-        $definition = $this->prophesize(AggregateDefiniton::class);
+        $snapshotStore = $this->prophesize(SnapshotStore::class);
 
-        $result = f\loadState($message->reveal(), $definition->reveal());
+        $message = $this->prophesize(Message::class);
+        $message = $message->reveal();
+
+        $definition = $this->prophesize(AggregateDefiniton::class);
+        $definition->aggregateType()->willReturn('test')->shouldBeCalled();
+        $definition->extractAggregateId($message)->willReturn('42')->shouldBeCalled();
+
+        $result = f\loadState($snapshotStore->reveal(), $message, $definition->reveal());
         $this->assertInternalType('array', $result);
         $this->assertEmpty($result);
+    }
+
+    /**
+     * @test
+     */
+    public function it_loads_state_from_snapshot_store(): void
+    {
+        $snapshotStore = new InMemorySnapshotStore();
+        $snapshotStore->save(new Snapshot(
+            'test',
+            '42',
+            ['foo' => 'bar'],
+            1,
+            new \DateTimeImmutable()
+        ));
+
+        $message = $this->prophesize(Message::class);
+        $message = $message->reveal();
+
+        $definition = $this->prophesize(AggregateDefiniton::class);
+        $definition->aggregateType()->willReturn('test')->shouldBeCalled();
+        $definition->extractAggregateId($message)->willReturn('42')->shouldBeCalled();
+
+        $result = f\loadState($snapshotStore, $message, $definition->reveal());
+        $this->assertEquals(['foo' => 'bar'], $result);
     }
 
     /**

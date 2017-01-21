@@ -20,7 +20,11 @@ use Prooph\EventStore\StreamName;
 
 interface AggregateDefiniton
 {
+    public function aggregateType(): string;
+
     public function identifierName(): string;
+
+    public function versionName(): string;
 
     public function extractAggregateId(Message $message): string;
 

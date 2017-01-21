@@ -26,6 +26,16 @@ final class TestAggregateDefinition implements AggregateDefiniton
         return 'id';
     }
 
+    public function aggregateType(): string
+    {
+        return 'test';
+    }
+
+    public function versionName(): string
+    {
+        return 'version';
+    }
+
     public function extractAggregateId(Message $message): string
     {
         return 'some_id';

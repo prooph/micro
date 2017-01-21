@@ -20,6 +20,7 @@ use Prooph\EventStore\Stream;
 use Prooph\EventStore\StreamName;
 use Prooph\Micro\AggregateDefiniton;
 use Prooph\Micro\AggregateResult;
+use Prooph\SnapshotStore\SnapshotStore;
 
 const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
 
@@ -27,7 +28,7 @@ const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
  * builds a dispatcher to return a function that receives a messages and return the state
  *
  * usage:
- * $dispatch = buildDispatcher($eventStore, $commandMap, $producerFactory);
+ * $dispatch = buildDispatcher($eventStoreFactory, $snapshotStoreFactory, $commandMap, $producerFactory);
  * $state = $dispatch($message);
  *
  * $producerFactory is expected to be a callback that returns an instance of Prooph\ServiceBus\Async\MessageProducer.
@@ -48,6 +49,7 @@ const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
  */
 function buildCommandDispatcher(
     callable $eventStoreFactory,
+    callable $snapshotStoreFactory,
     array $commandMap,
     callable $producerFactory,
     callable $startProducerTransaction = null,
@@ -55,6 +57,7 @@ function buildCommandDispatcher(
 ): callable {
     return function (Message $message) use (
         $eventStoreFactory,
+        $snapshotStoreFactory,
         $commandMap,
         $producerFactory,
         $startProducerTransaction,
@@ -64,8 +67,8 @@ function buildCommandDispatcher(
             return getAggregateDefinition($message, $commandMap);
         };
 
-        $loadState = function (AggregateDefiniton $definiton) use ($message): array {
-            return loadState($message, $definiton);
+        $loadState = function (AggregateDefiniton $definiton) use ($message, $snapshotStoreFactory): array {
+            return loadState($snapshotStoreFactory(), $message, $definiton);
         };
 
         $loadEvents = function (array $state) use ($message, $getDefinition, $eventStoreFactory): Iterator {
@@ -145,9 +148,15 @@ function pipleline(callable $firstCallback, callable ...$callbacks): callable
 
 const loadState = 'Prooph\Micro\Kernel\loadState';
 
-function loadState(Message $message, AggregateDefiniton $definiton): array
+function loadState(SnapshotStore $snapshotStore, Message $message, AggregateDefiniton $definiton): array
 {
-    return []; // @todo: fetch from projections
+    $aggregate = $snapshotStore->get($definiton->aggregateType(), $definiton->extractAggregateId($message));
+
+    if (! $aggregate) {
+        return [];
+    }
+
+    return $aggregate->aggregateRoot();
 }
 
 const loadEvents = 'Prooph\Micro\Kernel\loadEvents';

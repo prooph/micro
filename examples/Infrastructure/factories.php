@@ -23,6 +23,15 @@ $factories = [
 
         return $eventStore;
     },
+    'snapshotStore' => function (): \Prooph\SnapshotStore\SnapshotStore {
+        static $snapshotStore = null;
+
+        if (null === $snapshotStore) {
+            $snapshotStore = new \Prooph\SnapshotStore\InMemorySnapshotStore();
+        }
+
+        return $snapshotStore;
+    },
     'producer' => function (): callable {
         return function (Message $message): void {
         };

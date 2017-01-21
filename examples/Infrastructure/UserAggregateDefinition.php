@@ -18,6 +18,11 @@ use Prooph\Micro\AbstractAggregateDefiniton;
 
 final class UserAggregateDefinition extends AbstractAggregateDefiniton
 {
+    public function aggregateType(): string
+    {
+        return 'user';
+    }
+
     public function streamName(string $aggregateId): StreamName
     {
         return new StreamName('user_stream'); // add aggregate id for one stream per aggregate
