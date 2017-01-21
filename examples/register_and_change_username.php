@@ -19,6 +19,8 @@ use Prooph\MicroExample\Model\Command\ChangeUserName;
 use Prooph\MicroExample\Model\Command\InvalidCommand;
 use Prooph\MicroExample\Model\Command\RegisterUser;
 use Prooph\MicroExample\Model\Command\UnknownCommand;
+use Prooph\Micro\Kernel;
+use Prooph\MicroExample\Model\User;
 
 $start = microtime(true);
 
@@ -32,7 +34,7 @@ $factories = include 'Infrastructure/factories.php';
 $commandMap = [
     RegisterUser::class => [
         'handler' => function (array $state, Message $message) use (&$factories): AggregateResult {
-            return \Prooph\MicroExample\Model\User\registerUser($state, $message, $factories['emailGuard']());
+            return User\registerUser($state, $message, $factories['emailGuard']());
         },
         'definition' => UserAggregateDefinition::class,
     ],
@@ -42,7 +44,7 @@ $commandMap = [
     ],
 ];
 
-$dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher(
+$dispatch = Kernel\buildCommandDispatcher(
     $factories['eventStore'],
     $factories['snapshotStore'],
     $commandMap,
@@ -50,7 +52,7 @@ $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher(
 );
 
 // uncomment to enable amqp publisher
-//$dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher(
+//$dispatch = Kernel\buildCommandDispatcher(
 //    $factories['eventStore'],
 //    $commandMap,
 //    $factories['amqpProducer'],
