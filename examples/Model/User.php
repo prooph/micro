@@ -48,12 +48,20 @@ function apply(array $state, Message ...$events): array
     foreach ($events as $event) {
         switch ($event->messageName()) {
             case UserWasRegistered::class:
+                $state['version'] = 1;
+
                 return array_merge($state, $event->payload(), ['activated' => true]);
             case UserWasRegisteredWithDuplicateEmail::class:
-                return array_merge($state, $event->payload(), ['activated' => false, 'blocked_reason' => 'duplicate email']);
+                $state = array_merge($state, $event->payload(), ['activated' => false, 'blocked_reason' => 'duplicate email']);
+                ++$state['version'];
+
+                return $state;
             case UserNameWasChanged::class:
                 /* @var UserNameWasChanged $event */
-                return array_merge($state, ['name' => $event->username()]);
+                $state = array_merge($state, ['name' => $event->username()]);
+                ++$state['version'];
+
+                return $state;
         }
     }
 }
