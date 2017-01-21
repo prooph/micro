@@ -45,6 +45,7 @@ final class SnapshotReadModel implements ReadModel
         SnapshotStore $snapshotStore,
         AggregateDefiniton $aggregateDefiniton
     ) {
+        $this->eventStore = $eventStore;
         $this->snapshotStore = $snapshotStore;
         $this->aggregateDefinition = $aggregateDefiniton;
     }
