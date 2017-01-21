@@ -8,10 +8,16 @@
 composer install
 ```
 
-## Usage:
+## Usage
 
 ```bash
 php examples/register_and_change_username.php
+```
+
+## Run snapshotter
+
+```bash
+php examples/user_snapshotter.php
 ```
 
 ## Support
