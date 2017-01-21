@@ -36,11 +36,6 @@ final class SnapshotReadModel implements ReadModel
     private $aggregateDefinition;
 
     /**
-     * @var callable
-     */
-    private $stateLoader;
-
-    /**
      * @var array
      */
     private $cache = [];
@@ -48,14 +43,10 @@ final class SnapshotReadModel implements ReadModel
     public function __construct(
         EventStore $eventStore,
         SnapshotStore $snapshotStore,
-        AggregateDefiniton $aggregateDefiniton,
-        callable $stateLoader
+        AggregateDefiniton $aggregateDefiniton
     ) {
         $this->snapshotStore = $snapshotStore;
         $this->aggregateDefinition = $aggregateDefiniton;
-        $this->stateLoader = function (Message $event) use ($aggregateDefiniton, $stateLoader) {
-            return $stateLoader($event, $aggregateDefiniton);
-        };
     }
 
     public function stack(string $operation, ...$events): void
