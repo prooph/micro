@@ -20,6 +20,11 @@ php examples/register_and_change_username.php
 php examples/user_snapshotter.php
 ```
 
+## prooph Microservices in Action
+
+[prooph/micro-do](https://github.com/prooph/micro-do)
+
+
 ## Support
 
 - Ask questions on [prooph-users](https://groups.google.com/forum/?hl=de#!forum/prooph) mailing list.
