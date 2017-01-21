@@ -25,9 +25,10 @@ class AbstractAggregateDefinitionTest extends TestCase
     /**
      * @test
      */
-    public function it_returns_identifier(): void
+    public function it_returns_identifier_and_version_name(): void
     {
         $this->assertEquals('id', $this->createDefinition()->identifierName());
+        $this->assertEquals('version', $this->createDefinition()->versionName());
     }
 
     /**
@@ -114,6 +115,11 @@ class AbstractAggregateDefinitionTest extends TestCase
             public function streamName(string $aggregateId): StreamName
             {
                 return new StreamName('foo');
+            }
+
+            public function aggregateType(): string
+            {
+                return 'foo';
             }
 
             public function apply(array $state, Message ...$events): array

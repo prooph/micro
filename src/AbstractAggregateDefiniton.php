@@ -25,6 +25,11 @@ abstract class AbstractAggregateDefiniton implements AggregateDefiniton
         return 'id';
     }
 
+    public function versionName(): string
+    {
+        return 'version';
+    }
+
     public function extractAggregateId(Message $message): string
     {
         $idProperty = $this->identifierName();
@@ -33,7 +38,7 @@ abstract class AbstractAggregateDefiniton implements AggregateDefiniton
 
         if (! array_key_exists($idProperty, $payload)) {
             throw new \RuntimeException(sprintf(
-                'Missing aggregate id %s in command payload of command %s. Payload was %s',
+                'Missing aggregate id %s in payload of message %s. Payload was %s',
                 $idProperty,
                 $message->messageName(),
                 json_encode($payload)
