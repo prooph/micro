@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Prooph\MicroExample\Model\User;
 
+use InvalidArgumentException;
 use Prooph\Common\Messaging\Message;
 use Prooph\Micro\AggregateResult;
 use Prooph\MicroExample\Model\Command\ChangeUserName;
@@ -35,7 +36,7 @@ function registerUser(array $state, RegisterUser $command, UniqueEmailGuard $gua
 function changeUserName(array $state, ChangeUserName $command): AggregateResult
 {
     if (! mb_strlen($command->username()) > 3) {
-        throw new \InvalidArgumentException('Username too short');
+        throw new InvalidArgumentException('Username too short');
     }
 
     $event = new UserNameWasChanged($command->payload());

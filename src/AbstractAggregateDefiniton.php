@@ -17,6 +17,7 @@ use Prooph\Common\Messaging\Message;
 use Prooph\EventStore\Metadata\MetadataEnricher;
 use Prooph\EventStore\Metadata\MetadataMatcher;
 use Prooph\EventStore\Metadata\Operator;
+use RuntimeException;
 
 abstract class AbstractAggregateDefiniton implements AggregateDefiniton
 {
@@ -37,7 +38,7 @@ abstract class AbstractAggregateDefiniton implements AggregateDefiniton
         $payload = $message->payload();
 
         if (! array_key_exists($idProperty, $payload)) {
-            throw new \RuntimeException(sprintf(
+            throw new RuntimeException(sprintf(
                 'Missing aggregate id %s in payload of message %s. Payload was %s',
                 $idProperty,
                 $message->messageName(),
