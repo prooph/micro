@@ -114,7 +114,6 @@ class AbstractAggregateDefinitionTest extends TestCase
     public function it_reconstitutes_state(): void
     {
         $message = $this->prophesize(Message::class);
-        $message->payload()->willReturn(['count' => 1])->shouldBeCalled();
 
         $state = $this->createDefinition()->reconstituteState([], new \ArrayIterator([$message->reveal()]));
 
