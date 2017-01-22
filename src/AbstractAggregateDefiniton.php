@@ -33,52 +33,80 @@ abstract class AbstractAggregateDefiniton implements AggregateDefiniton
 
     public function extractAggregateId(Message $message): string
     {
-        $idProperty = $this->identifierName();
+        $idKey = $this->identifierName();
 
         $payload = $message->payload();
 
-        if (! array_key_exists($idProperty, $payload)) {
+        if (! array_key_exists($idKey, $payload)) {
             throw new RuntimeException(sprintf(
-                'Missing aggregate id %s in payload of message %s. Payload was %s',
-                $idProperty,
+                'Missing aggregate id key "%s" in payload of message %s. Payload was %s',
+                $idKey,
                 $message->messageName(),
                 json_encode($payload)
             ));
         }
 
-        return $payload[$idProperty];
+        return $payload[$idKey];
     }
 
-    public function metadataMatcher(string $aggregateId): ?MetadataMatcher
+    public function extractAggregateVersion(array $state): int
     {
-        return (new MetadataMatcher())->withMetadataMatch('_aggregate_id', Operator::EQUALS(), $aggregateId);
+        $versionKey = $this->versionName();
+
+        if (! array_key_exists($versionKey, $state)) {
+            throw new RuntimeException(sprintf(
+                'Missing aggregate version key "%s" in state. State was %s',
+                $versionKey,
+                json_encode($state)
+            ));
+        }
+
+        return $state[$versionKey];
     }
 
-    public function metadataEnricher(string $aggregateId): ?MetadataEnricher
+    public function metadataMatcher(string $aggregateId, int $aggregateVersion): ?MetadataMatcher
     {
-        return new class($aggregateId) implements MetadataEnricher {
-            private $id;
+        return (new MetadataMatcher())
+            ->withMetadataMatch('_aggregate_id', Operator::EQUALS(), $aggregateId)
 
-            public function __construct(string $id)
+            // this is only required when using a single stream for all aggregates
+            ->withMetadataMatch('_aggregate_type', Operator::EQUALS(), $this->aggregateType())
+
+            // this is only required when using one stream per aggregate type
+            ->withMetadataMatch('_aggregate_version', Operator::GREATER_THAN_EQUALS(), $aggregateVersion);
+    }
+
+    public function metadataEnricher(string $aggregateId, int $aggregateVersion): ?MetadataEnricher
+    {
+        return new class($aggregateId, $this->aggregateType(), $aggregateVersion) implements MetadataEnricher {
+            private $aggregateId;
+            private $aggregateType;
+            private $aggregateVersion;
+
+            public function __construct(string $aggregateId, string $aggregateType, int $aggregateVersion)
             {
-                $this->id = $id;
+                $this->aggregateId = $aggregateId;
+                $this->aggregateType = $aggregateType;
+                $this->aggregateVersion = $aggregateVersion;
             }
 
             public function enrich(Message $message): Message
             {
-                return $message->withAddedMetadata('_aggregate_id', $this->id);
+                $message = $message->withAddedMetadata('_aggregate_id', $this->aggregateId);
+
+                // this is only required when using a single stream for all aggregates
+                $message = $message->withAddedMetadata('_aggregate_type', $this->aggregateType);
+
+                // this is only required when using one stream per aggregate type
+                $message = $message->withAddedMetadata('_aggregate_version', $this->aggregateVersion);
+
+                return $message;
             }
         };
     }
 
-    public function reconstituteState(Iterator $events): array
+    public function reconstituteState(array $state, Iterator $events): array
     {
-        $state = [];
-
-        foreach ($events as $event) {
-            $state = $this->apply($state, $event);
-        }
-
-        return $state;
+        return $this->apply($state, ...$events);
     }
 }

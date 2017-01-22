@@ -15,7 +15,6 @@ namespace Prooph\Micro;
 use BadMethodCallException;
 use DateTimeImmutable;
 use Prooph\Common\Messaging\Message;
-use Prooph\EventStore\EventStore;
 use Prooph\EventStore\Projection\ReadModel;
 use Prooph\SnapshotStore\Snapshot;
 use Prooph\SnapshotStore\SnapshotStore;
@@ -23,11 +22,6 @@ use RuntimeException;
 
 final class SnapshotReadModel implements ReadModel
 {
-    /**
-     * @var EventStore
-     */
-    private $eventStore;
-
     /**
      * @var SnapshotStore
      */
@@ -44,11 +38,9 @@ final class SnapshotReadModel implements ReadModel
     private $cache = [];
 
     public function __construct(
-        EventStore $eventStore,
         SnapshotStore $snapshotStore,
         AggregateDefiniton $aggregateDefiniton
     ) {
-        $this->eventStore = $eventStore;
         $this->snapshotStore = $snapshotStore;
         $this->aggregateDefinition = $aggregateDefiniton;
     }
@@ -73,18 +65,6 @@ final class SnapshotReadModel implements ReadModel
                 } else {
                     $state = $snapshot->aggregateRoot();
                 }
-
-                $version = $state[$this->aggregateDefinition->versionName()] ?? 0;
-                ++$version;
-
-                $missingEvents = $this->eventStore->load(
-                    $this->aggregateDefinition->streamName($aggregateId),
-                    $version,
-                    null,
-                    $this->aggregateDefinition->metadataMatcher($aggregateId)
-                );
-
-                $state = $this->aggregateDefinition->apply($state, $missingEvents);
             } else {
                 $state = $this->cache[$aggregateId];
             }

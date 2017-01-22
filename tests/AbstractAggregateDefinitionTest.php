@@ -60,7 +60,7 @@ class AbstractAggregateDefinitionTest extends TestCase
      */
     public function it_returns_metadata_matcher(): void
     {
-        $metadataMatcher = $this->createDefinition()->metadataMatcher('some_id');
+        $metadataMatcher = $this->createDefinition()->metadataMatcher('some_id', 5);
 
         $this->assertInstanceOf(MetadataMatcher::class, $metadataMatcher);
 
@@ -70,6 +70,16 @@ class AbstractAggregateDefinitionTest extends TestCase
                     'field' => '_aggregate_id',
                     'operator' => Operator::EQUALS(),
                     'value' => 'some_id',
+                ],
+                [
+                    'field' => '_aggregate_type',
+                    'operator' => Operator::EQUALS(),
+                    'value' => 'foo',
+                ],
+                [
+                    'field' => '_aggregate_version',
+                    'operator' => Operator::GREATER_THAN_EQUALS(),
+                    'value' => 5,
                 ],
             ],
             $metadataMatcher->data()
@@ -81,11 +91,13 @@ class AbstractAggregateDefinitionTest extends TestCase
      */
     public function it_returns_metadata_enricher(): void
     {
-        $enricher = $this->createDefinition()->metadataEnricher('some_id');
+        $enricher = $this->createDefinition()->metadataEnricher('some_id', 42);
 
         $this->assertInstanceOf(MetadataEnricher::class, $enricher);
 
         $enrichedMessage = $this->prophesize(Message::class);
+        $enrichedMessage->withAddedMetadata('_aggregate_type', 'foo')->willReturn($enrichedMessage)->shouldBeCalled();
+        $enrichedMessage->withAddedMetadata('_aggregate_version', 42)->willReturn($enrichedMessage)->shouldBeCalled();
         $enrichedMessage = $enrichedMessage->reveal();
 
         $message = $this->prophesize(Message::class);
@@ -103,7 +115,7 @@ class AbstractAggregateDefinitionTest extends TestCase
     {
         $message = $this->prophesize(Message::class);
 
-        $state = $this->createDefinition()->reconstituteState(new \ArrayIterator([$message->reveal()]));
+        $state = $this->createDefinition()->reconstituteState([], new \ArrayIterator([$message->reveal()]));
 
         $this->assertArrayHasKey('count', $state);
         $this->assertEquals(1, $state['count']);

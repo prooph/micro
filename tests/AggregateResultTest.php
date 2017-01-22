@@ -23,7 +23,7 @@ class AggregateResultTest extends TestCase
      */
     public function it_creates_empty_aggregate_result(): void
     {
-        $result = new AggregateResult([], []);
+        $result = new AggregateResult([]);
 
         $this->assertEquals([], $result->raisedEvents());
         $this->assertEquals([], $result->state());
@@ -37,7 +37,7 @@ class AggregateResultTest extends TestCase
         $message = $this->prophesize(Message::class);
         $message->messageType()->willReturn(Message::TYPE_EVENT)->shouldBeCalled();
 
-        $result = new AggregateResult([$message->reveal()], ['foo' => 'bar']);
+        $result = new AggregateResult(['foo' => 'bar'], $message->reveal());
 
         $this->assertNotEmpty($result->raisedEvents());
         $this->assertEquals(['foo' => 'bar'], $result->state());
@@ -53,6 +53,6 @@ class AggregateResultTest extends TestCase
         $message = $this->prophesize(Message::class);
         $message->messageType()->willReturn(Message::TYPE_COMMAND)->shouldBeCalled();
 
-        new AggregateResult([$message->reveal()], ['foo' => 'bar']);
+        new AggregateResult(['foo' => 'bar'], $message->reveal());
     }
 }

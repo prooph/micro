@@ -28,13 +28,15 @@ interface AggregateDefiniton
 
     public function extractAggregateId(Message $message): string;
 
+    public function extractAggregateVersion(array $state): int;
+
     public function streamName(string $aggregateId): StreamName;
 
-    public function metadataEnricher(string $aggregateId): ?MetadataEnricher;
+    public function metadataEnricher(string $aggregateId, int $aggregateVersion): ?MetadataEnricher;
 
-    public function metadataMatcher(string $aggregateId): ?MetadataMatcher;
+    public function metadataMatcher(string $aggregateId, int $aggregateVersion): ?MetadataMatcher;
 
-    public function reconstituteState(Iterator $events): array;
+    public function reconstituteState(array $state, Iterator $events): array;
 
     public function apply(array $state, Message ...$events): array;
 }

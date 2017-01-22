@@ -37,7 +37,7 @@ $factories = [
 
         return $snapshotStore;
     },
-    'producer' => function (): callable {
+    'dummyProducer' => function (): callable {
         return function (Message $message): void {
         };
     },

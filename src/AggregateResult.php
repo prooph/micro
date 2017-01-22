@@ -21,7 +21,7 @@ final class AggregateResult
 
     private $state;
 
-    public function __construct(array $raisedEvents, array $state)
+    public function __construct(array $state, Message ...$raisedEvents)
     {
         foreach ($raisedEvents as $event) {
             $this->assertEvent($event);
