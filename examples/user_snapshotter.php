@@ -29,7 +29,6 @@ $eventStore = $factories['eventStore']();
 /* @var EventStore $eventStore */
 
 $readModel = new SnapshotReadModel(
-    $eventStore,
     $factories['snapshotStore'](),
     new UserAggregateDefinition()
 );
