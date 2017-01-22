@@ -30,24 +30,29 @@ const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
  * builds a dispatcher to return a function that receives a messages and return the state
  *
  * usage:
- * $dispatch = buildDispatcher($eventStoreFactory, $snapshotStoreFactory, $aggregateDefinition, $handlerMap, $producerFactory);
+ * $dispatch = buildDispatcher($eventStoreFactory, $snapshotStoreFactory, $commandMap, $producerFactory);
  * $state = $dispatch($message);
  *
  * $producerFactory is expected to be a callback that returns an instance of Prooph\ServiceBus\Async\MessageProducer.
  * $commandMap is expected to be an array like this:
  * [
- *     RegisterUser::class => function (array $state, Message $message) use (&$factories): AggregateResult {
- *         return \Prooph\MicroExample\Model\User\registerUser($state, $message, $factories['emailGuard']());
- *     },
- *     ChangeUserName::class => \Prooph\MicroExample\Model\User\changeUserName,
+ *     RegisterUser::class => [
+ *         'handler' => function (array $state, Message $message) use (&$factories): AggregateResult {
+ *             return \Prooph\MicroExample\Model\User\registerUser($state, $message, $factories['emailGuard']());
+ *         },
+ *         'definition' => UserAggregateDefinition::class,
+ *     ],
+ *     ChangeUserName::class => [
+ *         'handler' => '\Prooph\MicroExample\Model\User\changeUserName',
+ *         'definition' => UserAggregateDefinition::class,
+ *     ],
  * ]
  * $message is expected to be an instance of Prooph\Common\Messaging\Message
  */
 function buildCommandDispatcher(
     callable $eventStoreFactory,
     callable $snapshotStoreFactory,
-    AggregateDefiniton $aggregateDefiniton,
-    array $handlerMap,
+    array $commandMap,
     callable $producerFactory,
     callable $startProducerTransaction = null,
     callable $commitProducerTransaction = null
@@ -55,37 +60,45 @@ function buildCommandDispatcher(
     return function (Message $message) use (
         $eventStoreFactory,
         $snapshotStoreFactory,
-        $aggregateDefiniton,
-        $handlerMap,
+        $commandMap,
         $producerFactory,
         $startProducerTransaction,
         $commitProducerTransaction
     ) {
-        $loadState = function (Message $message) use ($aggregateDefiniton, $snapshotStoreFactory): array {
-            return loadState($snapshotStoreFactory(), $message, $aggregateDefiniton);
+        $getDefinition = function (Message $message) use ($commandMap): AggregateDefiniton {
+            return getAggregateDefinition($message, $commandMap);
         };
 
-        $loadEvents = function (array $state) use ($message, $aggregateDefiniton, $eventStoreFactory): Iterator {
-            $aggregateId = $aggregateDefiniton->extractAggregateId($message);
+        $loadState = function (AggregateDefiniton $definiton) use ($message, $snapshotStoreFactory): array {
+            return loadState($snapshotStoreFactory(), $message, $definiton);
+        };
+
+        $loadEvents = function (array $state) use ($message, $getDefinition, $eventStoreFactory): Iterator {
+            $definition = $getDefinition($message);
+            /* @var AggregateDefiniton $definition */
+            $aggregateId = $definition->extractAggregateId($message);
+
             if (empty($state)) {
                 $nextVersion = 1;
             } else {
-                $nextVersion = $aggregateDefiniton->extractAggregateVersion($state) + 1;
+                $nextVersion = $definition->extractAggregateVersion($state) + 1;
             }
 
             return loadEvents(
-                $aggregateDefiniton->streamName($aggregateId),
-                $aggregateDefiniton->metadataMatcher($aggregateId, $nextVersion),
+                $definition->streamName($aggregateId),
+                $definition->metadataMatcher($aggregateId, $nextVersion),
                 $eventStoreFactory
             );
         };
 
-        $reconstituteState = function (Iterator $events) use ($message, $aggregateDefiniton): array {
-            return $aggregateDefiniton->reconstituteState($events);
+        $reconstituteState = function (Iterator $events) use ($message, $getDefinition): array {
+            $definition = $getDefinition($message);
+
+            return $definition->reconstituteState($events);
         };
 
-        $handleCommand = function (array $state) use ($message, $handlerMap): AggregateResult {
-            $handler = getHandler($message, $handlerMap);
+        $handleCommand = function (array $state) use ($message, $commandMap): AggregateResult {
+            $handler = getHandler($message, $commandMap);
 
             $aggregateResult = $handler($state, $message);
 
@@ -96,17 +109,10 @@ function buildCommandDispatcher(
             return $aggregateResult;
         };
 
-        $persistEvents = function (AggregateResult $aggregateResult) use (
-            $eventStoreFactory,
-            $message,
-            $aggregateDefiniton
-        ): AggregateResult {
-            return persistEvents(
-                $aggregateResult,
-                $eventStoreFactory,
-                $aggregateDefiniton,
-                $aggregateDefiniton->extractAggregateId($message)
-            );
+        $persistEvents = function (AggregateResult $aggregateResult) use ($eventStoreFactory, $message, $getDefinition): AggregateResult {
+            $definition = $getDefinition($message);
+
+            return persistEvents($aggregateResult, $eventStoreFactory, $definition, $definition->extractAggregateId($message));
         };
 
         $publishEvents = function (AggregateResult $aggregateResult) use (
@@ -114,10 +120,16 @@ function buildCommandDispatcher(
             $startProducerTransaction,
             $commitProducerTransaction
         ): AggregateResult {
-            return publishEvents($aggregateResult, $producerFactory, $startProducerTransaction, $commitProducerTransaction);
+            return publishEvents(
+                $aggregateResult,
+                $producerFactory,
+                $startProducerTransaction,
+                $commitProducerTransaction
+            );
         };
 
         return pipleline(
+            $getDefinition,
             $loadState,
             $loadEvents,
             $reconstituteState,
@@ -261,5 +273,26 @@ function getHandler(Message $message, array $commandMap): callable
         ));
     }
 
-    return $commandMap[$message->messageName()];
+    return $commandMap[$message->messageName()]['handler'];
+}
+
+const getAggregateDefinition = 'Prooph\Micro\Kernel\getAggregateDefinition';
+
+function getAggregateDefinition(Message $message, array $commandMap): AggregateDefiniton
+{
+    static $cached = [];
+
+    $messageName = $message->messageName();
+
+    if (isset($cached[$messageName])) {
+        return $cached[$messageName];
+    }
+
+    if (! isset($commandMap[$messageName])) {
+        throw new RuntimeException(sprintf('Unknown message %s. Message name not mapped to an aggregate.', $message->messageName()));
+    }
+
+    $cached[$messageName] = new $commandMap[$messageName]['definition']();
+
+    return $cached[$messageName];
 }
