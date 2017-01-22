@@ -73,10 +73,10 @@ class KernelTest extends TestCase
         };
 
         $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher(
-            $eventStoreFactory,
-            $snapshotStoreFactory,
             $commandMap,
-            $producerFactory
+            $eventStoreFactory,
+            $producerFactory,
+            $snapshotStoreFactory
         );
 
         $command = $this->prophesize(Message::class);
@@ -141,10 +141,10 @@ class KernelTest extends TestCase
         };
 
         $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher(
-            $eventStoreFactory,
-            $snapshotStoreFactory,
             $commandMap,
+            $eventStoreFactory,
             $producerFactory,
+            $snapshotStoreFactory,
             $start,
             $commit
         );
@@ -202,10 +202,10 @@ class KernelTest extends TestCase
         };
 
         $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher(
-            $eventStoreFactory,
-            $snapshotStoreFactory,
             $commandMap,
-            $producerFactory
+            $eventStoreFactory,
+            $producerFactory,
+            $snapshotStoreFactory
         );
 
         $command = $this->prophesize(Message::class);

@@ -45,17 +45,18 @@ $commandMap = [
 ];
 
 $dispatch = Kernel\buildCommandDispatcher(
-    $factories['eventStore'],
-    $factories['snapshotStore'],
     $commandMap,
-    $factories['dummyProducer']
+    $factories['eventStore'],
+    $factories['dummyProducer'],
+    $factories['snapshotStore']
 );
 
 // uncomment to enable amqp publisher
 //$dispatch = Kernel\buildCommandDispatcher(
-//    $factories['eventStore'],
 //    $commandMap,
+//    $factories['eventStore'],
 //    $factories['amqpProducer'],
+//    $factories['snapshotStore'],
 //    $factories['startAmqpTransaction'],
 //    $factories['commitAmqpTransaction']
 //);

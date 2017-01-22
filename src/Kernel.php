@@ -30,7 +30,7 @@ const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
  * builds a dispatcher to return a function that receives a messages and return the state
  *
  * usage:
- * $dispatch = buildDispatcher($eventStoreFactory, $snapshotStoreFactory, $commandMap, $producerFactory);
+ * $dispatch = buildDispatcher($commandMap, $eventStoreFactory, $producerFactory, $snapshotStoreFactory);
  * $state = $dispatch($message);
  *
  * $producerFactory is expected to be a callback that returns an instance of Prooph\ServiceBus\Async\MessageProducer.
@@ -50,17 +50,17 @@ const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
  * $message is expected to be an instance of Prooph\Common\Messaging\Message
  */
 function buildCommandDispatcher(
-    callable $eventStoreFactory,
-    callable $snapshotStoreFactory,
     array $commandMap,
+    callable $eventStoreFactory,
     callable $producerFactory,
+    callable $snapshotStoreFactory = null,
     callable $startProducerTransaction = null,
     callable $commitProducerTransaction = null
 ): callable {
     return function (Message $message) use (
+        $commandMap,
         $eventStoreFactory,
         $snapshotStoreFactory,
-        $commandMap,
         $producerFactory,
         $startProducerTransaction,
         $commitProducerTransaction
@@ -70,6 +70,10 @@ function buildCommandDispatcher(
         };
 
         $loadState = function (AggregateDefiniton $definiton) use ($message, $snapshotStoreFactory): array {
+            if (null === $snapshotStoreFactory) {
+                return [];
+            }
+
             return loadState($snapshotStoreFactory(), $message, $definiton);
         };
 
