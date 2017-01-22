@@ -14,12 +14,12 @@ namespace Prooph\MicroExample\Script;
 
 use Prooph\Common\Messaging\Message;
 use Prooph\Micro\AggregateResult;
+use Prooph\Micro\Kernel;
 use Prooph\MicroExample\Infrastructure\UserAggregateDefinition;
 use Prooph\MicroExample\Model\Command\ChangeUserName;
 use Prooph\MicroExample\Model\Command\InvalidCommand;
 use Prooph\MicroExample\Model\Command\RegisterUser;
 use Prooph\MicroExample\Model\Command\UnknownCommand;
-use Prooph\Micro\Kernel;
 use Prooph\MicroExample\Model\User;
 
 $start = microtime(true);
