@@ -11,23 +11,28 @@
 declare(strict_types=1);
 
 use Prooph\Common\Messaging\Message;
+use Prooph\Common\Messaging\NoOpMessageConverter;
+use Prooph\EventStore\InMemoryEventStore;
 use Prooph\MicroExample\Infrastructure\InMemoryEmailGuard;
+use Prooph\MicroExample\Model\UniqueEmailGuard;
+use Prooph\SnapshotStore\InMemorySnapshotStore;
+use Prooph\SnapshotStore\SnapshotStore;
 
 $factories = [
     'eventStore' => function (): \Prooph\EventStore\EventStore {
         static $eventStore = null;
 
         if (null === $eventStore) {
-            $eventStore = new \Prooph\EventStore\InMemoryEventStore();
+            $eventStore = new InMemoryEventStore();
         }
 
         return $eventStore;
     },
-    'snapshotStore' => function (): \Prooph\SnapshotStore\SnapshotStore {
+    'snapshotStore' => function (): SnapshotStore {
         static $snapshotStore = null;
 
         if (null === $snapshotStore) {
-            $snapshotStore = new \Prooph\SnapshotStore\InMemorySnapshotStore();
+            $snapshotStore = new InMemorySnapshotStore();
         }
 
         return $snapshotStore;
@@ -36,19 +41,19 @@ $factories = [
         return function (Message $message): void {
         };
     },
-    'amqpChannel' => function (): \AMQPChannel {
+    'amqpChannel' => function (): AMQPChannel {
         static $channel = null;
 
         if (null === $channel) {
-            $connection = new \AMQPConnection();
+            $connection = new AMQPConnection();
             $connection->connect();
 
-            $channel = new \AMQPChannel($connection);
+            $channel = new AMQPChannel($connection);
         }
 
         return $channel;
     },
-    'emailGuard' => function (): \Prooph\MicroExample\Model\UniqueEmailGuard {
+    'emailGuard' => function (): UniqueEmailGuard {
         static $emailGuard = null;
 
         if (null === $emailGuard) {
@@ -62,7 +67,7 @@ $factories = [
 $factories['amqpProducer'] = function () use ($factories): callable {
     return \Prooph\Micro\AmqpPublisher\buildPublisher(
         $factories['amqpChannel'](),
-        new \Prooph\Common\Messaging\NoOpMessageConverter(),
+        new NoOpMessageConverter(),
         'micro'
     );
 };

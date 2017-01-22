@@ -21,6 +21,8 @@ use Prooph\EventStore\StreamName;
 use Prooph\Micro\AggregateDefiniton;
 use Prooph\Micro\AggregateResult;
 use Prooph\SnapshotStore\SnapshotStore;
+use RuntimeException;
+use Throwable;
 
 const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
 
@@ -94,7 +96,7 @@ function buildCommandDispatcher(
             $aggregateResult = $handler($state, $message);
 
             if (! $aggregateResult instanceof AggregateResult) {
-                throw new \RuntimeException('Invalid aggregate result returned');
+                throw new RuntimeException('Invalid aggregate result returned');
             }
 
             return $aggregateResult;
@@ -138,7 +140,7 @@ function pipleline(callable $firstCallback, callable ...$callbacks): callable
             $result = array_reduce($callbacks, function ($accumulator, callable $callback) {
                 return $callback($accumulator);
             }, $value);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             return $e;
         }
 
@@ -242,7 +244,7 @@ const getHandler = 'Prooph\Micro\Kernel\getHandler';
 function getHandler(Message $message, array $commandMap): callable
 {
     if (! array_key_exists($message->messageName(), $commandMap)) {
-        throw new \RuntimeException(sprintf('Unknown message %s. Message name not mapped to an aggregate.', $message->messageName()));
+        throw new RuntimeException(sprintf('Unknown message %s. Message name not mapped to an aggregate.', $message->messageName()));
     }
 
     return $commandMap[$message->messageName()]['handler'];
@@ -261,7 +263,7 @@ function getAggregateDefinition(Message $message, array $commandMap): AggregateD
     }
 
     if (! isset($commandMap[$messageName])) {
-        throw new \RuntimeException(sprintf('Unknown message %s. Message name not mapped to an aggregate.', $message->messageName()));
+        throw new RuntimeException(sprintf('Unknown message %s. Message name not mapped to an aggregate.', $message->messageName()));
     }
 
     $cached[$messageName] = new $commandMap[$messageName]['definition']();

@@ -12,11 +12,14 @@ declare(strict_types=1);
 
 namespace Prooph\Micro;
 
+use BadMethodCallException;
+use DateTimeImmutable;
 use Prooph\Common\Messaging\Message;
 use Prooph\EventStore\EventStore;
 use Prooph\EventStore\Projection\ReadModel;
 use Prooph\SnapshotStore\Snapshot;
 use Prooph\SnapshotStore\SnapshotStore;
+use RuntimeException;
 
 final class SnapshotReadModel implements ReadModel
 {
@@ -54,7 +57,7 @@ final class SnapshotReadModel implements ReadModel
     {
         foreach ($events as $event) {
             if (! $event instanceof Message) {
-                throw new \RuntimeException(get_class($this) . ' can only handle events of type ' . Message::class);
+                throw new RuntimeException(get_class($this) . ' can only handle events of type ' . Message::class);
             }
 
             $aggregateId = $this->aggregateDefinition->extractAggregateId($event);
@@ -98,7 +101,7 @@ final class SnapshotReadModel implements ReadModel
                 $aggregateId,
                 $state,
                 $state[$this->aggregateDefinition->versionName()],
-                new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
+                new DateTimeImmutable('now', new \DateTimeZone('UTC'))
             ));
         }
 
@@ -107,7 +110,7 @@ final class SnapshotReadModel implements ReadModel
 
     public function init(): void
     {
-        throw new \BadMethodCallException('Initializing a snapshot read model is not supported');
+        throw new BadMethodCallException('Initializing a snapshot read model is not supported');
     }
 
     public function isInitialized(): bool
@@ -117,11 +120,11 @@ final class SnapshotReadModel implements ReadModel
 
     public function reset(): void
     {
-        throw new \BadMethodCallException('Resetting a snapshot read model is not supported');
+        throw new BadMethodCallException('Resetting a snapshot read model is not supported');
     }
 
     public function delete(): void
     {
-        throw new \BadMethodCallException('Deleting a snapshot read model is not supported');
+        throw new BadMethodCallException('Deleting a snapshot read model is not supported');
     }
 }

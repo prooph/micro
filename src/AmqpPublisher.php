@@ -12,19 +12,22 @@ declare(strict_types=1);
 
 namespace Prooph\Micro\AmqpPublisher;
 
+use AMQPChannel;
+use AMQPExchange;
 use Prooph\Common\Messaging\Message;
 use Prooph\Common\Messaging\MessageConverter;
 use Prooph\Common\Messaging\MessageDataAssertion;
+use RuntimeException;
 
 const buildPublisher = 'Prooph\Micro\AmqpProducer\buildPublisher';
 
-function buildPublisher(\AMQPChannel $channel, MessageConverter $messageConverter, string $exchangeName): callable
+function buildPublisher(AMQPChannel $channel, MessageConverter $messageConverter, string $exchangeName): callable
 {
     if (! $channel->isConnected()) {
-        throw new \RuntimeException('Provided AMQP channel is not connected');
+        throw new RuntimeException('Provided AMQP channel is not connected');
     }
 
-    $exchange = new \AMQPExchange($channel);
+    $exchange = new AMQPExchange($channel);
     $exchange->setName($exchangeName);
 
     return function (Message $message) use ($messageConverter, $exchange) {
@@ -43,5 +46,5 @@ const throwCommitFailed = 'Prooph\Micro\AmqpPublisher\throwCommitFailed';
 
 function throwCommitFailed(): void
 {
-    throw new \RuntimeException('AMQP transaction failed');
+    throw new RuntimeException('AMQP transaction failed');
 }
