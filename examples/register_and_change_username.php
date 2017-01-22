@@ -63,6 +63,7 @@ $dispatch = Kernel\buildCommandDispatcher(
 $command = new RegisterUser(['id' => '1', 'name' => 'Alex', 'email' => 'member@getprooph.org']);
 
 $state = $dispatch($command);
+
 echo "User was registered: \n";
 echo json_encode($state) . "\n\n";
 
