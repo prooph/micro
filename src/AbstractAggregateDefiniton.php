@@ -73,7 +73,7 @@ abstract class AbstractAggregateDefiniton implements AggregateDefiniton
             ->withMetadataMatch('_aggregate_type', Operator::EQUALS(), $this->aggregateType())
 
             // this is only required when using one stream per aggregate type
-            ->withMetadataMatch('_aggregate_version', Operator::EQUALS(), $aggregateVersion);
+            ->withMetadataMatch('_aggregate_version', Operator::GREATER_THAN_EQUALS(), $aggregateVersion);
     }
 
     public function metadataEnricher(string $aggregateId, int $aggregateVersion): ?MetadataEnricher
