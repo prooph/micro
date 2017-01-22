@@ -236,7 +236,7 @@ services:
       - $httpPort:80
       - $httpsPort:443
     volumes:
-      - ./gateway:/etc/nginx/sites-enabled:ro
+      - ./$gatewayDirectory:/etc/nginx/sites-enabled:ro
 
 EOT;
 
@@ -246,10 +246,10 @@ EOT;
     image: postgres:alpine
     ports:
       - $dbPort:5432
-    environment:
-      - POSTGRES_DB=$dbName
     volumes:
       - ./packages/shared/vendor/prooph/pdo-event-store/scripts/postgres:/docker-entrypoint-initdb.d
+    environment:
+      - POSTGRES_DB=$dbName
 EOT;
         } else {
             $config .= <<<EOT
@@ -257,6 +257,8 @@ EOT;
     image: mysql
     ports:
      - $dbPort:3306
+    volumes:
+      - ./packages/shared/vendor/prooph/pdo-event-store/scripts/mysql:/docker-entrypoint-initdb.d
     environment:
       - MYSQL_ROOT_PASSWORD=$mysqlRoot
       - MYSQL_DATABASE=$dbName
