@@ -72,6 +72,7 @@ $state = $dispatch(new ChangeUserName(['id' => '1', 'name' => 'Sascha']));
 echo "Username changed: \n";
 echo json_encode($state) . "\n\n";
 
+// should return a TypeError
 $state = $dispatch(new InvalidCommand());
 
 echo get_class($state) . "\n";
@@ -79,6 +80,7 @@ echo json_encode($state->getMessage()) . "\n\n";
 
 $state = $dispatch(new UnknownCommand());
 
+// should return a RuntimeException
 echo get_class($state) . "\n";
 echo json_encode($state->getMessage()) . "\n\n";
 
