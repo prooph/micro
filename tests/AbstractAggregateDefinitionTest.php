@@ -78,7 +78,7 @@ class AbstractAggregateDefinitionTest extends TestCase
                 ],
                 [
                     'field' => '_aggregate_version',
-                    'operator' => Operator::EQUALS(),
+                    'operator' => Operator::GREATER_THAN_EQUALS(),
                     'value' => 5,
                 ],
             ],
