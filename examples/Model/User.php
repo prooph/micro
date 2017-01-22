@@ -32,7 +32,7 @@ function registerUser(array $state, RegisterUser $command, UniqueEmailGuard $gua
         $event = new UserWasRegisteredWithDuplicateEmail($command->payload());
     }
 
-    return new AggregateResult([$event], apply($state, $event));
+    return new AggregateResult(apply($state, $event), $event);
 }
 
 const changeUserName = 'Prooph\MicroExample\Model\User\changeUserName';
@@ -45,7 +45,7 @@ function changeUserName(array $state, ChangeUserName $command): AggregateResult
 
     $event = new UserNameWasChanged($command->payload(), ['_aggregate_version' => $state['version'] + 1]);
 
-    return new AggregateResult([$event], apply($state, $event));
+    return new AggregateResult(apply($state, $event), $event);
 }
 
 const apply = 'Prooph\MicroExample\Model\User\apply';

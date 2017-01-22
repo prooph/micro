@@ -214,7 +214,7 @@ function persistEvents(AggregateResult $aggregateResult, callable $eventStoreFac
         $eventStore->create(new Stream($streamName, new \ArrayIterator($events)));
     }
 
-    return new AggregateResult($events, $aggregateResult->state());
+    return new AggregateResult($aggregateResult->state(), ...$events);
 }
 
 const publishEvents = 'Prooph\Micro\Kernel\publishEvents';

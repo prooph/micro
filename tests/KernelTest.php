@@ -37,7 +37,7 @@ class KernelTest extends TestCase
         $commandMap = [
             'some_command' => [
                 'handler' => function (array $state, Message $message): AggregateResult {
-                    return new AggregateResult([], ['some' => 'state']);
+                    return new AggregateResult(['some' => 'state']);
                 },
                 'definition' => TestAggregateDefinition::class,
             ],
@@ -90,7 +90,7 @@ class KernelTest extends TestCase
         $commandMap = [
             'some_command' => [
                 'handler' => function (array $state, Message $message): AggregateResult {
-                    return new AggregateResult([], ['some' => 'state']);
+                    return new AggregateResult(['some' => 'state']);
                 },
                 'definition' => TestAggregateDefinition::class,
             ],
@@ -303,7 +303,7 @@ class KernelTest extends TestCase
 
         $state = ['foo' => 'bar', 'version' => 42];
 
-        $aggregateResult = new AggregateResult($raisedEvents, $state);
+        $aggregateResult = new AggregateResult($state, ...$raisedEvents);
 
         $aggregateDefinition = $this->prophesize(AggregateDefiniton::class);
         $aggregateDefinition->extractAggregateVersion($state)->willReturn(42)->shouldBeCalled();
@@ -339,9 +339,7 @@ class KernelTest extends TestCase
             return $eventStore->reveal();
         };
 
-        $raisedEvents = [$message->reveal()];
-
-        $aggregateResult = new AggregateResult($raisedEvents, ['foo' => 'bar']);
+        $aggregateResult = new AggregateResult(['foo' => 'bar'], $message->reveal());
 
         $aggregateDefinition = $this->prophesize(AggregateDefiniton::class);
         $aggregateDefinition->extractAggregateVersion(['foo' => 'bar'])->willReturn(42)->shouldBeCalled();
@@ -372,7 +370,7 @@ class KernelTest extends TestCase
 
         $raisedEvents = [$message->reveal()];
 
-        $aggregateResult = new AggregateResult($raisedEvents, ['foo' => 'bar']);
+        $aggregateResult = new AggregateResult(['foo' => 'bar'], ...$raisedEvents);
 
         $published = false;
 
