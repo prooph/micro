@@ -178,7 +178,7 @@ Database name: $dbName
 
 EOT;
         if ('PostgreSQL' === $database) {
-            $question .= "Postgres port: $dbPort\n";
+            $question .= "PostgreSQL port: $dbPort\n";
         } else {
             $question .= "MySQL port: $dbPort\nMySQL root password: $mysqlRoot\n";
         }
