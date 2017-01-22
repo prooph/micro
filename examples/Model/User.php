@@ -22,6 +22,8 @@ use Prooph\MicroExample\Model\Event\UserWasRegistered;
 use Prooph\MicroExample\Model\Event\UserWasRegisteredWithDuplicateEmail;
 use Prooph\MicroExample\Model\UniqueEmailGuard;
 
+const registerUser = 'Prooph\MicroExample\Model\User\registerUser';
+
 function registerUser(array $state, RegisterUser $command, UniqueEmailGuard $guard): AggregateResult
 {
     if ($guard->isUnique($command->email())) {
@@ -33,6 +35,8 @@ function registerUser(array $state, RegisterUser $command, UniqueEmailGuard $gua
     return new AggregateResult([$event], apply($state, $event));
 }
 
+const changeUserName = 'Prooph\MicroExample\Model\User\changeUserName';
+
 function changeUserName(array $state, ChangeUserName $command): AggregateResult
 {
     if (! mb_strlen($command->username()) > 3) {
@@ -43,6 +47,8 @@ function changeUserName(array $state, ChangeUserName $command): AggregateResult
 
     return new AggregateResult([$event], apply($state, $event));
 }
+
+const apply = 'Prooph\MicroExample\Model\User\apply';
 
 function apply(array $state, Message ...$events): array
 {

@@ -38,13 +38,8 @@ $commandMap = [
         },
         'definition' => UserAggregateDefinition::class,
     ],
-    'handler' => function (array $state, Message $message): AggregateResult {
-        return \Prooph\MicroDo\UserWrite\Model\User\registerWithData($state, $message);
-    },
     ChangeUserName::class => [
-        'handler' => function (array $state, Message $message): AggregateResult {
-            return User\changeUserName($state, $message);
-        },
+        'handler' => User\changeUserName,
         'definition' => UserAggregateDefinition::class,
     ],
 ];
