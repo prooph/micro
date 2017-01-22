@@ -31,30 +31,26 @@ require 'Model/User.php';
 //We could also use a container here, if dependencies grow
 $factories = include 'Infrastructure/factories.php';
 
-$commandMap = [
-    RegisterUser::class => [
-        'handler' => function (array $state, Message $message) use (&$factories): AggregateResult {
-            return User\registerUser($state, $message, $factories['emailGuard']());
-        },
-        'definition' => UserAggregateDefinition::class,
-    ],
-    ChangeUserName::class => [
-        'handler' => User\changeUserName,
-        'definition' => UserAggregateDefinition::class,
-    ],
+$handlerMap = [
+    RegisterUser::class => function (array $state, Message $message) use (&$factories): AggregateResult {
+        return User\registerUser($state, $message, $factories['emailGuard']());
+    },
+    ChangeUserName::class => User\changeUserName,
 ];
 
 $dispatch = Kernel\buildCommandDispatcher(
     $factories['eventStore'],
     $factories['snapshotStore'],
-    $commandMap,
-    $factories['producer']
+    new UserAggregateDefinition(),
+    $handlerMap,
+    $factories['dummyProducer']
 );
 
 // uncomment to enable amqp publisher
 //$dispatch = Kernel\buildCommandDispatcher(
 //    $factories['eventStore'],
-//    $commandMap,
+//    new UserAggregateDefinition(),
+//    $handlerMap,
 //    $factories['amqpProducer'],
 //    $factories['startAmqpTransaction'],
 //    $factories['commitAmqpTransaction']

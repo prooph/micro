@@ -30,29 +30,24 @@ const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
  * builds a dispatcher to return a function that receives a messages and return the state
  *
  * usage:
- * $dispatch = buildDispatcher($eventStoreFactory, $snapshotStoreFactory, $commandMap, $producerFactory);
+ * $dispatch = buildDispatcher($eventStoreFactory, $snapshotStoreFactory, $aggregateDefinition, $handlerMap, $producerFactory);
  * $state = $dispatch($message);
  *
  * $producerFactory is expected to be a callback that returns an instance of Prooph\ServiceBus\Async\MessageProducer.
  * $commandMap is expected to be an array like this:
  * [
- *     RegisterUser::class => [
- *         'handler' => function (array $state, Message $message) use (&$factories): AggregateResult {
- *             return \Prooph\MicroExample\Model\User\registerUser($state, $message, $factories['emailGuard']());
- *         },
- *         'definition' => UserAggregateDefinition::class,
- *     ],
- *     ChangeUserName::class => [
- *         'handler' => '\Prooph\MicroExample\Model\User\changeUserName',
- *         'definition' => UserAggregateDefinition::class,
- *     ],
+ *     RegisterUser::class => function (array $state, Message $message) use (&$factories): AggregateResult {
+ *         return \Prooph\MicroExample\Model\User\registerUser($state, $message, $factories['emailGuard']());
+ *     },
+ *     ChangeUserName::class => \Prooph\MicroExample\Model\User\changeUserName,
  * ]
  * $message is expected to be an instance of Prooph\Common\Messaging\Message
  */
 function buildCommandDispatcher(
     callable $eventStoreFactory,
     callable $snapshotStoreFactory,
-    array $commandMap,
+    AggregateDefiniton $aggregateDefiniton,
+    array $handlerMap,
     callable $producerFactory,
     callable $startProducerTransaction = null,
     callable $commitProducerTransaction = null
@@ -60,44 +55,37 @@ function buildCommandDispatcher(
     return function (Message $message) use (
         $eventStoreFactory,
         $snapshotStoreFactory,
-        $commandMap,
+        $aggregateDefiniton,
+        $handlerMap,
         $producerFactory,
         $startProducerTransaction,
         $commitProducerTransaction
     ) {
-        $getDefinition = function (Message $message) use ($commandMap): AggregateDefiniton {
-            return getAggregateDefinition($message, $commandMap);
+        $loadState = function (Message $message) use ($aggregateDefiniton, $snapshotStoreFactory): array {
+            return loadState($snapshotStoreFactory(), $message, $aggregateDefiniton);
         };
 
-        $loadState = function (AggregateDefiniton $definiton) use ($message, $snapshotStoreFactory): array {
-            return loadState($snapshotStoreFactory(), $message, $definiton);
-        };
-
-        $loadEvents = function (array $state) use ($message, $getDefinition, $eventStoreFactory): Iterator {
-            $definition = $getDefinition($message);
-            /* @var AggregateDefiniton $definition */
-            $aggregateId = $definition->extractAggregateId($message);
+        $loadEvents = function (array $state) use ($message, $aggregateDefiniton, $eventStoreFactory): Iterator {
+            $aggregateId = $aggregateDefiniton->extractAggregateId($message);
             if (empty($state)) {
                 $nextVersion = 1;
             } else {
-                $nextVersion = $definition->extractAggregateVersion($state) + 1;
+                $nextVersion = $aggregateDefiniton->extractAggregateVersion($state) + 1;
             }
 
             return loadEvents(
-                $definition->streamName($aggregateId),
-                $definition->metadataMatcher($aggregateId, $nextVersion),
+                $aggregateDefiniton->streamName($aggregateId),
+                $aggregateDefiniton->metadataMatcher($aggregateId, $nextVersion),
                 $eventStoreFactory
             );
         };
 
-        $reconstituteState = function (Iterator $events) use ($message, $getDefinition): array {
-            $definition = $getDefinition($message);
-
-            return $definition->reconstituteState($events);
+        $reconstituteState = function (Iterator $events) use ($message, $aggregateDefiniton): array {
+            return $aggregateDefiniton->reconstituteState($events);
         };
 
-        $handleCommand = function (array $state) use ($message, $commandMap): AggregateResult {
-            $handler = getHandler($message, $commandMap);
+        $handleCommand = function (array $state) use ($message, $handlerMap): AggregateResult {
+            $handler = getHandler($message, $handlerMap);
 
             $aggregateResult = $handler($state, $message);
 
@@ -108,10 +96,17 @@ function buildCommandDispatcher(
             return $aggregateResult;
         };
 
-        $persistEvents = function (AggregateResult $aggregateResult) use ($eventStoreFactory, $message, $getDefinition): AggregateResult {
-            $definition = $getDefinition($message);
-
-            return persistEvents($aggregateResult, $eventStoreFactory, $definition, $definition->extractAggregateId($message));
+        $persistEvents = function (AggregateResult $aggregateResult) use (
+            $eventStoreFactory,
+            $message,
+            $aggregateDefiniton
+        ): AggregateResult {
+            return persistEvents(
+                $aggregateResult,
+                $eventStoreFactory,
+                $aggregateDefiniton,
+                $aggregateDefiniton->extractAggregateId($message)
+            );
         };
 
         $publishEvents = function (AggregateResult $aggregateResult) use (
@@ -123,7 +118,6 @@ function buildCommandDispatcher(
         };
 
         return pipleline(
-            $getDefinition,
             $loadState,
             $loadEvents,
             $reconstituteState,
@@ -172,14 +166,12 @@ const loadEvents = 'Prooph\Micro\Kernel\loadEvents';
 function loadEvents(
     StreamName $streamName,
     ?MetadataMatcher $metadataMatcher,
-    callable $eventStoreFactory,
-    int $fromVersion = 1,
-    array $state = []
+    callable $eventStoreFactory
 ): Iterator {
     $eventStore = $eventStoreFactory();
 
     if ($eventStore->hasStream($streamName)) {
-        return $eventStore->load($streamName, $fromVersion, null, $metadataMatcher)->streamEvents();
+        return $eventStore->load($streamName, 1, null, $metadataMatcher)->streamEvents();
     }
 
     return new ArrayIterator();
@@ -187,8 +179,12 @@ function loadEvents(
 
 const persistEvents = 'Prooph\Micro\Kernel\persistEvents';
 
-function persistEvents(AggregateResult $aggregateResult, callable $eventStoreFactory, AggregateDefiniton $definition, string $aggregateId): AggregateResult
-{
+function persistEvents(
+    AggregateResult $aggregateResult,
+    callable $eventStoreFactory,
+    AggregateDefiniton $definition,
+    string $aggregateId
+): AggregateResult {
     $events = $aggregateResult->raisedEvents();
 
     $metadataEnricher = function (Message $event) use ($aggregateResult, $definition, $aggregateId) {
@@ -259,10 +255,13 @@ const getHandler = 'Prooph\Micro\Kernel\getHandler';
 function getHandler(Message $message, array $commandMap): callable
 {
     if (! array_key_exists($message->messageName(), $commandMap)) {
-        throw new RuntimeException(sprintf('Unknown message "%s". Message name not mapped to an aggregate.', $message->messageName()));
+        throw new RuntimeException(sprintf(
+            'Unknown message "%s". Message name not mapped to an aggregate.',
+            $message->messageName()
+        ));
     }
 
-    return $commandMap[$message->messageName()]['handler'];
+    return $commandMap[$message->messageName()];
 }
 
 const getAggregateDefinition = 'Prooph\Micro\Kernel\getAggregateDefinition';
@@ -278,7 +277,10 @@ function getAggregateDefinition(Message $message, array $commandMap): AggregateD
     }
 
     if (! isset($commandMap[$messageName])) {
-        throw new RuntimeException(sprintf('Unknown message "%s". Message name not mapped to an aggregate.', $message->messageName()));
+        throw new RuntimeException(sprintf(
+            'Unknown message "%s". Message name not mapped to an aggregate.',
+            $message->messageName()
+        ));
     }
 
     $cached[$messageName] = new $commandMap[$messageName]['definition']();

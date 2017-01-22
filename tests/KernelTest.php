@@ -34,13 +34,10 @@ class KernelTest extends TestCase
      */
     public function it_builds_command_dispatcher_and_dispatches(): void
     {
-        $commandMap = [
-            'some_command' => [
-                'handler' => function (array $state, Message $message): AggregateResult {
-                    return new AggregateResult(['some' => 'state']);
-                },
-                'definition' => TestAggregateDefinition::class,
-            ],
+        $handlerMap = [
+            'some_command' => function (array $state, Message $message): AggregateResult {
+                return new AggregateResult(['some' => 'state']);
+            },
         ];
 
         $eventStoreFactory = function (): EventStore {
@@ -72,7 +69,13 @@ class KernelTest extends TestCase
             };
         };
 
-        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStoreFactory, $snapshotStoreFactory, $commandMap, $producerFactory);
+        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher(
+            $eventStoreFactory,
+            $snapshotStoreFactory,
+            new TestAggregateDefinition(),
+            $handlerMap,
+            $producerFactory
+        );
 
         $command = $this->prophesize(Message::class);
         $command->messageName()->willReturn('some_command')->shouldBeCalled();
@@ -87,13 +90,10 @@ class KernelTest extends TestCase
      */
     public function it_builds_command_dispatcher_and_dispatches_with_transactional_publishing(): void
     {
-        $commandMap = [
-            'some_command' => [
-                'handler' => function (array $state, Message $message): AggregateResult {
-                    return new AggregateResult(['some' => 'state']);
-                },
-                'definition' => TestAggregateDefinition::class,
-            ],
+        $handlerMap = [
+            'some_command' => function (array $state, Message $message): AggregateResult {
+                return new AggregateResult(['some' => 'state']);
+            },
         ];
 
         $eventStoreFactory = function (): EventStore {
@@ -136,7 +136,15 @@ class KernelTest extends TestCase
             $commited = true;
         };
 
-        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStoreFactory, $snapshotStoreFactory, $commandMap, $producerFactory, $start, $commit);
+        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher(
+            $eventStoreFactory,
+            $snapshotStoreFactory,
+            new TestAggregateDefinition(),
+            $handlerMap,
+            $producerFactory,
+            $start,
+            $commit
+        );
 
         $command = $this->prophesize(Message::class);
         $command->messageName()->willReturn('some_command')->shouldBeCalled();
@@ -153,13 +161,10 @@ class KernelTest extends TestCase
      */
     public function it_builds_command_dispatcher_and_dispatches_but_breaks_when_handler_returns_invalid_result(): void
     {
-        $commandMap = [
-            'some_command' => [
-                'handler' => function (array $state, Message $message): string {
-                    return 'invalid';
-                },
-                'definition' => TestAggregateDefinition::class,
-            ],
+        $handlerMap = [
+            'some_command' => function (array $state, Message $message): string {
+                return 'invalid';
+            },
         ];
 
         $eventStoreFactory = function (): EventStore {
@@ -190,14 +195,20 @@ class KernelTest extends TestCase
             };
         };
 
-        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStoreFactory, $snapshotStoreFactory, $commandMap, $producerFactory);
+        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher(
+            $eventStoreFactory,
+            $snapshotStoreFactory,
+            new TestAggregateDefinition(),
+            $handlerMap,
+            $producerFactory
+        );
 
         $command = $this->prophesize(Message::class);
         $command->messageName()->willReturn('some_command')->shouldBeCalled();
 
         $result = $dispatch($command->reveal());
 
-        $this->assertInstanceOf(\Exception::class, $result);
+        $this->assertInstanceOf(\RuntimeException::class, $result);
         $this->assertEquals('Invalid aggregate result returned', $result->getMessage());
     }
 
@@ -393,10 +404,10 @@ class KernelTest extends TestCase
         $message = $this->prophesize(Message::class);
         $message->messageName()->willReturn('foo')->shouldBeCalled();
 
-        $commandMap = ['foo' => ['handler' => function (): void {
-        }]];
+        $handlerMap = ['foo' => function (): void {
+        }];
 
-        $result = f\getHandler($message->reveal(), $commandMap);
+        $result = f\getHandler($message->reveal(), $handlerMap);
 
         $this->assertInstanceOf(\Closure::class, $result);
     }
@@ -411,10 +422,10 @@ class KernelTest extends TestCase
         $message = $this->prophesize(Message::class);
         $message->messageName()->willReturn('unknown')->shouldBeCalled();
 
-        $commandMap = ['foo' => ['handler' => function (): void {
+        $handlerMap = ['foo' => ['handler' => function (): void {
         }]];
 
-        f\getHandler($message->reveal(), $commandMap);
+        f\getHandler($message->reveal(), $handlerMap);
     }
 
     /**
@@ -425,13 +436,13 @@ class KernelTest extends TestCase
         $message = $this->prophesize(Message::class);
         $message->messageName()->willReturn('foo')->shouldBeCalled();
 
-        $commandMap = ['foo' => ['definition' => TestAggregateDefinition::class]];
+        $handlerMap = ['foo' => ['definition' => TestAggregateDefinition::class]];
 
-        $result = f\getAggregateDefinition($message->reveal(), $commandMap);
+        $result = f\getAggregateDefinition($message->reveal(), $handlerMap);
 
         $this->assertInstanceOf(TestAggregateDefinition::class, $result);
 
-        $result2 = f\getAggregateDefinition($message->reveal(), $commandMap);
+        $result2 = f\getAggregateDefinition($message->reveal(), $handlerMap);
 
         $this->assertSame($result, $result2);
     }
@@ -446,9 +457,9 @@ class KernelTest extends TestCase
         $message = $this->prophesize(Message::class);
         $message->messageName()->willReturn('bar')->shouldBeCalled();
 
-        $commandMap = [];
+        $handlerMap = [];
 
-        f\getAggregateDefinition($message->reveal(), $commandMap);
+        f\getAggregateDefinition($message->reveal(), $handlerMap);
     }
 
     /**
