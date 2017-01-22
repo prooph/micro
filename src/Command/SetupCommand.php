@@ -247,7 +247,7 @@ EOT;
     ports:
       - $dbPort:5432
     volumes:
-      - ./packages/shared/vendor/prooph/pdo-event-store/scripts/postgres:/docker-entrypoint-initdb.d
+      - ./vendor/prooph/pdo-event-store/scripts/postgres:/docker-entrypoint-initdb.d
     environment:
       - POSTGRES_DB=$dbName
 EOT;
@@ -258,7 +258,7 @@ EOT;
     ports:
      - $dbPort:3306
     volumes:
-      - ./packages/shared/vendor/prooph/pdo-event-store/scripts/mysql:/docker-entrypoint-initdb.d
+      - ./vendor/prooph/pdo-event-store/scripts/mysql:/docker-entrypoint-initdb.d
     environment:
       - MYSQL_ROOT_PASSWORD=$mysqlRoot
       - MYSQL_DATABASE=$dbName
