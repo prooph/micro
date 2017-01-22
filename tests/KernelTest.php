@@ -431,40 +431,6 @@ class KernelTest extends TestCase
     /**
      * @test
      */
-    public function it_gets_aggregate_definition_from_cache(): void
-    {
-        $message = $this->prophesize(Message::class);
-        $message->messageName()->willReturn('foo')->shouldBeCalled();
-
-        $handlerMap = ['foo' => ['definition' => TestAggregateDefinition::class]];
-
-        $result = f\getAggregateDefinition($message->reveal(), $handlerMap);
-
-        $this->assertInstanceOf(TestAggregateDefinition::class, $result);
-
-        $result2 = f\getAggregateDefinition($message->reveal(), $handlerMap);
-
-        $this->assertSame($result, $result2);
-    }
-
-    /**
-     * @test
-     */
-    public function it_throws_exception_when_no_definition_found(): void
-    {
-        $this->expectException(\RuntimeException::class);
-
-        $message = $this->prophesize(Message::class);
-        $message->messageName()->willReturn('bar')->shouldBeCalled();
-
-        $handlerMap = [];
-
-        f\getAggregateDefinition($message->reveal(), $handlerMap);
-    }
-
-    /**
-     * @test
-     */
     public function it_pipes(): void
     {
         $result = f\pipleline('strtolower', 'ucfirst')('aBC');

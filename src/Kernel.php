@@ -263,27 +263,3 @@ function getHandler(Message $message, array $commandMap): callable
 
     return $commandMap[$message->messageName()];
 }
-
-const getAggregateDefinition = 'Prooph\Micro\Kernel\getAggregateDefinition';
-
-function getAggregateDefinition(Message $message, array $commandMap): AggregateDefiniton
-{
-    static $cached = [];
-
-    $messageName = $message->messageName();
-
-    if (isset($cached[$messageName])) {
-        return $cached[$messageName];
-    }
-
-    if (! isset($commandMap[$messageName])) {
-        throw new RuntimeException(sprintf(
-            'Unknown message "%s". Message name not mapped to an aggregate.',
-            $message->messageName()
-        ));
-    }
-
-    $cached[$messageName] = new $commandMap[$messageName]['definition']();
-
-    return $cached[$messageName];
-}
