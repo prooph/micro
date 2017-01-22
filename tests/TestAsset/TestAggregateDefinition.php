@@ -61,9 +61,9 @@ final class TestAggregateDefinition implements AggregateDefiniton
         return null;
     }
 
-    public function reconstituteState(Iterator $events): array
+    public function reconstituteState(array $state, Iterator $events): array
     {
-        return [];
+        return $state;
     }
 
     public function apply(array $state, Message ...$events): array

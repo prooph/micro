@@ -36,7 +36,7 @@ interface AggregateDefiniton
 
     public function metadataMatcher(string $aggregateId, int $aggregateVersion): ?MetadataMatcher;
 
-    public function reconstituteState(Iterator $events): array;
+    public function reconstituteState(array $state, Iterator $events): array;
 
     public function apply(array $state, Message ...$events): array;
 }

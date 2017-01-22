@@ -73,7 +73,7 @@ function buildCommandDispatcher(
             return loadState($snapshotStoreFactory(), $message, $definiton);
         };
 
-        $loadEvents = function (array $state) use ($message, $getDefinition, $eventStoreFactory): Iterator {
+        $reconstituteState = function (array $state) use ($message, $getDefinition, $eventStoreFactory): array {
             $definition = $getDefinition($message);
             /* @var AggregateDefiniton $definition */
             $aggregateId = $definition->extractAggregateId($message);
@@ -84,17 +84,13 @@ function buildCommandDispatcher(
                 $nextVersion = $definition->extractAggregateVersion($state) + 1;
             }
 
-            return loadEvents(
+            $events = loadEvents(
                 $definition->streamName($aggregateId),
                 $definition->metadataMatcher($aggregateId, $nextVersion),
                 $eventStoreFactory
             );
-        };
 
-        $reconstituteState = function (Iterator $events) use ($message, $getDefinition): array {
-            $definition = $getDefinition($message);
-
-            return $definition->reconstituteState($events);
+            return $definition->reconstituteState($state, $events);
         };
 
         $handleCommand = function (array $state) use ($message, $commandMap): AggregateResult {
@@ -131,7 +127,6 @@ function buildCommandDispatcher(
         return pipleline(
             $getDefinition,
             $loadState,
-            $loadEvents,
             $reconstituteState,
             $handleCommand,
             $persistEvents,

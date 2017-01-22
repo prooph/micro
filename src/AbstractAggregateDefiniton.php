@@ -105,14 +105,8 @@ abstract class AbstractAggregateDefiniton implements AggregateDefiniton
         };
     }
 
-    public function reconstituteState(Iterator $events): array
+    public function reconstituteState(array $state, Iterator $events): array
     {
-        $state = [];
-
-        foreach ($events as $event) {
-            $state = $this->apply($state, $event);
-        }
-
-        return $state;
+        return $this->apply($state, ...$events);
     }
 }

@@ -15,6 +15,7 @@ namespace Prooph\MicroExample\Infrastructure;
 use Prooph\Common\Messaging\Message;
 use Prooph\EventStore\StreamName;
 use Prooph\Micro\AbstractAggregateDefiniton;
+use Prooph\MicroExample\Model\User;
 
 final class UserAggregateDefinition extends AbstractAggregateDefiniton
 {
@@ -30,6 +31,6 @@ final class UserAggregateDefinition extends AbstractAggregateDefiniton
 
     public function apply(array $state, Message ...$events): array
     {
-        return \Prooph\MicroExample\Model\User\apply($state, ...$events);
+        return User\apply($state, ...$events);
     }
 }

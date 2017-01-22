@@ -27,9 +27,9 @@ const registerUser = 'Prooph\MicroExample\Model\User\registerUser';
 function registerUser(array $state, RegisterUser $command, UniqueEmailGuard $guard): AggregateResult
 {
     if ($guard->isUnique($command->email())) {
-        $event = new UserWasRegistered($command->payload());
+        $event = new UserWasRegistered(array_merge($command->payload(), ['version' => 1]));
     } else {
-        $event = new UserWasRegisteredWithDuplicateEmail($command->payload());
+        $event = new UserWasRegisteredWithDuplicateEmail(array_merge($command->payload(), ['version' => ++$state['version']]));
     }
 
     return new AggregateResult(apply($state, $event), $event);
@@ -43,7 +43,7 @@ function changeUserName(array $state, ChangeUserName $command): AggregateResult
         throw new InvalidArgumentException('Username too short');
     }
 
-    $event = new UserNameWasChanged($command->payload(), ['_aggregate_version' => $state['version'] + 1]);
+    $event = new UserNameWasChanged(array_merge($command->payload(), ['version' => $state['version'] + 1]));
 
     return new AggregateResult(apply($state, $event), $event);
 }
@@ -55,11 +55,16 @@ function apply(array $state, Message ...$events): array
     foreach ($events as $event) {
         switch ($event->messageName()) {
             case UserWasRegistered::class:
-                return array_merge($state, $event->payload(), ['activated' => true, 'version' => 1]);
+                $state = array_merge($state, $event->payload(), ['activated' => true]);
+                break;
             case UserWasRegisteredWithDuplicateEmail::class:
-                return array_merge($state, $event->payload(), ['activated' => false, 'blocked_reason' => 'duplicate email', 'version' => ++$state['version']]);
+                $state = array_merge($state, $event->payload(), ['activated' => false, 'blocked_reason' => 'duplicate email']);
+                break;
             case UserNameWasChanged::class:
-                return array_merge($state, ['name' => $event->username(), 'version' => ++$state['version']]);
+                $state = array_merge($state, $event->payload());
+                break;
         }
     }
+
+    return $state;
 }
