@@ -49,24 +49,58 @@ abstract class AbstractAggregateDefiniton implements AggregateDefiniton
         return $payload[$idProperty];
     }
 
-    public function metadataMatcher(string $aggregateId): ?MetadataMatcher
+    public function extractAggregateVersion(array $state): int
     {
-        return (new MetadataMatcher())->withMetadataMatch('_aggregate_id', Operator::EQUALS(), $aggregateId);
+        $versionProperty = $this->versionName();
+
+        if (! array_key_exists($versionProperty, $state)) {
+            throw new RuntimeException(sprintf(
+                'Missing aggregate version property "%s" in state. State was %s',
+                $versionProperty,
+                json_encode($state)
+            ));
+        }
+
+        return $state[$versionProperty];
     }
 
-    public function metadataEnricher(string $aggregateId): ?MetadataEnricher
+    public function metadataMatcher(string $aggregateId, int $aggregateVersion): ?MetadataMatcher
     {
-        return new class($aggregateId) implements MetadataEnricher {
-            private $id;
+        return (new MetadataMatcher())
+            ->withMetadataMatch('_aggregate_id', Operator::EQUALS(), $aggregateId)
 
-            public function __construct(string $id)
+            // this is only required when using a single stream for all aggregates
+            ->withMetadataMatch('_aggregate_type', Operator::EQUALS(), $this->aggregateType())
+
+            // this is only required when using one stream per aggregate type
+            ->withMetadataMatch('_aggregate_version', Operator::EQUALS(), $aggregateVersion);
+    }
+
+    public function metadataEnricher(string $aggregateId, int $aggregateVersion): ?MetadataEnricher
+    {
+        return new class($aggregateId, $this->aggregateType(), $aggregateVersion) implements MetadataEnricher {
+            private $aggregateId;
+            private $aggregateType;
+            private $aggregateVersion;
+
+            public function __construct(string $aggregateId, string $aggregateType, int $aggregateVersion)
             {
-                $this->id = $id;
+                $this->aggregateId = $aggregateId;
+                $this->aggregateType = $aggregateType;
+                $this->aggregateVersion = $aggregateVersion;
             }
 
             public function enrich(Message $message): Message
             {
-                return $message->withAddedMetadata('_aggregate_id', $this->id);
+                $message = $message->withAddedMetadata('_aggregate_id', $this->aggregateId);
+
+                // this is only required when using a single stream for all aggregates
+                $message = $message->withAddedMetadata('_aggregate_type', $this->aggregateType);
+
+                // this is only required when using one stream per aggregate type
+                $message = $message->withAddedMetadata('_aggregate_version', $this->aggregateVersion);
+
+                return $message;
             }
         };
     }

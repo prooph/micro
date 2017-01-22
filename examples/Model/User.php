@@ -43,7 +43,7 @@ function changeUserName(array $state, ChangeUserName $command): AggregateResult
         throw new InvalidArgumentException('Username too short');
     }
 
-    $event = new UserNameWasChanged($command->payload());
+    $event = new UserNameWasChanged($command->payload(), ['_aggregate_version' => $state['version'] + 1]);
 
     return new AggregateResult([$event], apply($state, $event));
 }
@@ -55,20 +55,11 @@ function apply(array $state, Message ...$events): array
     foreach ($events as $event) {
         switch ($event->messageName()) {
             case UserWasRegistered::class:
-                $state['version'] = 1;
-
-                return array_merge($state, $event->payload(), ['activated' => true]);
+                return array_merge($state, $event->payload(), ['activated' => true, 'version' => 1]);
             case UserWasRegisteredWithDuplicateEmail::class:
-                $state = array_merge($state, $event->payload(), ['activated' => false, 'blocked_reason' => 'duplicate email']);
-                ++$state['version'];
-
-                return $state;
+                return array_merge($state, $event->payload(), ['activated' => false, 'blocked_reason' => 'duplicate email', 'version' => ++$state['version']]);
             case UserNameWasChanged::class:
-                /* @var UserNameWasChanged $event */
-                $state = array_merge($state, ['name' => $event->username()]);
-                ++$state['version'];
-
-                return $state;
+                return array_merge($state, ['name' => $event->username(), 'version' => ++$state['version']]);
         }
     }
 }

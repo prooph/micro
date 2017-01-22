@@ -75,11 +75,17 @@ function buildCommandDispatcher(
 
         $loadEvents = function (array $state) use ($message, $getDefinition, $eventStoreFactory): Iterator {
             $definition = $getDefinition($message);
+            /* @var AggregateDefiniton $definition */
             $aggregateId = $definition->extractAggregateId($message);
+            if (empty($state)) {
+                $nextVersion = 1;
+            } else {
+                $nextVersion = $definition->extractAggregateVersion($state) + 1;
+            }
 
             return loadEvents(
                 $definition->streamName($aggregateId),
-                $definition->metadataMatcher($aggregateId),
+                $definition->metadataMatcher($aggregateId, $nextVersion),
                 $eventStoreFactory
             );
         };
@@ -185,9 +191,18 @@ function persistEvents(AggregateResult $aggregateResult, callable $eventStoreFac
 {
     $events = $aggregateResult->raisedEvents();
 
-    if ($metadataEnricher = $definition->metadataEnricher($aggregateId)) {
-        $events = array_map([$metadataEnricher, 'enrich'], $events);
-    }
+    $metadataEnricher = function (Message $event) use ($aggregateResult, $definition, $aggregateId) {
+        $aggregateVersion = $definition->extractAggregateVersion($aggregateResult->state());
+        $metadataEnricher = $definition->metadataEnricher($aggregateId, $aggregateVersion);
+
+        if (null !== $metadataEnricher) {
+            $event = $metadataEnricher->enrich($event);
+        }
+
+        return $event;
+    };
+
+    $events = array_map($metadataEnricher, $events);
 
     $streamName = $definition->streamName($aggregateId);
 
@@ -244,7 +259,7 @@ const getHandler = 'Prooph\Micro\Kernel\getHandler';
 function getHandler(Message $message, array $commandMap): callable
 {
     if (! array_key_exists($message->messageName(), $commandMap)) {
-        throw new RuntimeException(sprintf('Unknown message %s. Message name not mapped to an aggregate.', $message->messageName()));
+        throw new RuntimeException(sprintf('Unknown message "%s". Message name not mapped to an aggregate.', $message->messageName()));
     }
 
     return $commandMap[$message->messageName()]['handler'];
@@ -263,7 +278,7 @@ function getAggregateDefinition(Message $message, array $commandMap): AggregateD
     }
 
     if (! isset($commandMap[$messageName])) {
-        throw new RuntimeException(sprintf('Unknown message %s. Message name not mapped to an aggregate.', $message->messageName()));
+        throw new RuntimeException(sprintf('Unknown message "%s". Message name not mapped to an aggregate.', $message->messageName()));
     }
 
     $cached[$messageName] = new $commandMap[$messageName]['definition']();

@@ -301,17 +301,20 @@ class KernelTest extends TestCase
         $message->messageType()->willReturn(Message::TYPE_EVENT)->shouldBeCalled();
         $raisedEvents = [$message->reveal()];
 
-        $aggregateResult = new AggregateResult($raisedEvents, ['foo' => 'bar']);
+        $state = ['foo' => 'bar', 'version' => 42];
+
+        $aggregateResult = new AggregateResult($raisedEvents, $state);
 
         $aggregateDefinition = $this->prophesize(AggregateDefiniton::class);
-        $aggregateDefinition->metadataEnricher('some_id')->willReturn(null)->shouldBeCalled();
+        $aggregateDefinition->extractAggregateVersion($state)->willReturn(42)->shouldBeCalled();
+        $aggregateDefinition->metadataEnricher('some_id', 42)->willReturn(null)->shouldBeCalled();
         $aggregateDefinition->streamName('some_id')->willReturn(new StreamName('foo'))->shouldBeCalled();
 
         $result = f\persistEvents($aggregateResult, $factory, $aggregateDefinition->reveal(), 'some_id');
 
         $this->assertInstanceOf(AggregateResult::class, $result);
         $this->assertSame($raisedEvents, $result->raisedEvents());
-        $this->assertEquals(['foo' => 'bar'], $result->state());
+        $this->assertEquals($state, $result->state());
     }
 
     /**
@@ -341,7 +344,8 @@ class KernelTest extends TestCase
         $aggregateResult = new AggregateResult($raisedEvents, ['foo' => 'bar']);
 
         $aggregateDefinition = $this->prophesize(AggregateDefiniton::class);
-        $aggregateDefinition->metadataEnricher('some_id')->willReturn(
+        $aggregateDefinition->extractAggregateVersion(['foo' => 'bar'])->willReturn(42)->shouldBeCalled();
+        $aggregateDefinition->metadataEnricher('some_id', 42)->willReturn(
             new class() implements MetadataEnricher {
                 public function enrich(Message $message): Message
                 {

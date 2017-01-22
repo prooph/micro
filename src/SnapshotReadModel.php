@@ -15,7 +15,6 @@ namespace Prooph\Micro;
 use BadMethodCallException;
 use DateTimeImmutable;
 use Prooph\Common\Messaging\Message;
-use Prooph\EventStore\EventStore;
 use Prooph\EventStore\Projection\ReadModel;
 use Prooph\SnapshotStore\Snapshot;
 use Prooph\SnapshotStore\SnapshotStore;

@@ -14,12 +14,12 @@ namespace Prooph\MicroExample\Script;
 
 use Prooph\Common\Messaging\Message;
 use Prooph\Micro\AggregateResult;
+use Prooph\Micro\Kernel;
 use Prooph\MicroExample\Infrastructure\UserAggregateDefinition;
 use Prooph\MicroExample\Model\Command\ChangeUserName;
 use Prooph\MicroExample\Model\Command\InvalidCommand;
 use Prooph\MicroExample\Model\Command\RegisterUser;
 use Prooph\MicroExample\Model\Command\UnknownCommand;
-use Prooph\Micro\Kernel;
 use Prooph\MicroExample\Model\User;
 
 $start = microtime(true);
@@ -63,7 +63,6 @@ $dispatch = Kernel\buildCommandDispatcher(
 $command = new RegisterUser(['id' => '1', 'name' => 'Alex', 'email' => 'member@getprooph.org']);
 
 $state = $dispatch($command);
-
 echo "User was registered: \n";
 echo json_encode($state) . "\n\n";
 
@@ -76,13 +75,13 @@ echo json_encode($state) . "\n\n";
 $state = $dispatch(new InvalidCommand());
 
 echo get_class($state) . "\n";
-echo json_encode($state->getMessage()) . "\n\n";
+echo $state->getMessage() . "\n\n";
 
 $state = $dispatch(new UnknownCommand());
 
 // should return a RuntimeException
 echo get_class($state) . "\n";
-echo json_encode($state->getMessage()) . "\n\n";
+echo $state->getMessage() . "\n\n";
 
 $time = microtime(true) - $start;
 

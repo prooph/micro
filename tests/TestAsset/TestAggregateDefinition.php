@@ -41,17 +41,22 @@ final class TestAggregateDefinition implements AggregateDefiniton
         return 'some_id';
     }
 
+    public function extractAggregateVersion(array $state): int
+    {
+        return $state[$this->versionName()];
+    }
+
     public function streamName(string $aggregateId): StreamName
     {
         return new StreamName('foo');
     }
 
-    public function metadataEnricher(string $aggregateId): ?MetadataEnricher
+    public function metadataEnricher(string $aggregateId, int $aggregateVersion): ?MetadataEnricher
     {
         return null;
     }
 
-    public function metadataMatcher(string $aggregateId): ?MetadataMatcher
+    public function metadataMatcher(string $aggregateId, int $aggregateVersion): ?MetadataMatcher
     {
         return null;
     }
