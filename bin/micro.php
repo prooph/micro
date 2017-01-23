@@ -28,4 +28,5 @@ $application = new Application('Prooph-Micro CLI');
 $application->add(new Command\SetupCommand());
 $application->add(new Command\CreateMySqlCommand());
 $application->add(new Command\CreatePostgresCommand());
+$application->add(new Command\CreatePhpImageCommand());
 $application->run();
