@@ -29,6 +29,7 @@
         "prooph/php-cs-fixer-config": "^0.1.1",
         "beberlei/assert": "^2.7",
         "symfony/console": "^3.2.2",
+        "symfony/filesystem": ">=2.6",
         "symfony/yaml": "^3.2.2",
         "romanpitak/nginx-config-processor": "^0.2.1"
     },
