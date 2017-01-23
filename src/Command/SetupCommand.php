@@ -170,15 +170,15 @@ services:
       - prooph-gateway-directory: ./$gatewayDirectory
 EOT;
 
-        if ($httpPort != '80' || $httpsPort != '443') {
+        if ($httpPort !== '80' || $httpsPort !== '443') {
             $config .= "\n    ports:\n";
         }
 
-        if ($httpPort != '80') {
+        if ($httpPort !== '80') {
             $config .= "      - $httpPort:80\n";
         }
 
-        if ($httpsPort != '433') {
+        if ($httpsPort !== '433') {
             $config .= "      - $httpsPort:443\n";
         }
 

@@ -173,11 +173,11 @@ EOT;
 
         if ($dbPort === 'random') {
             $config['services'][$serviceName]['ports'] = [
-                "5432",
+                '5432',
             ];
         }
 
-        if ($dbPort != '5432') {
+        if ($dbPort !== '5432') {
             $config['services'][$serviceName]['ports'] = [
                 "$dbPort:5432",
             ];
