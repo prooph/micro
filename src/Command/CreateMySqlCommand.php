@@ -84,9 +84,9 @@ class CreateMySqlCommand extends AbstractCommand
 
         $dbName = $helper->ask($input, $output, $question);
 
-        $question = new Question('MySQL port (defaults to "3306"): ', '3306');
+        $question = new Question('MySQL host port (guest is 3306, defaults to random): ', 'random');
         $question->setValidator(function ($answer) {
-            if (! is_numeric($answer) || $answer === 0) {
+            if (! is_numeric($answer) && 'random' !== $answer) {
                 throw new \RuntimeException(
                     'Invalid MySQL port'
                 );
@@ -175,9 +175,6 @@ EOT;
             'services' => [
                 $serviceName => [
                     'image' => $image,
-                    'ports' => [
-                        "$dbPort:3306",
-                    ],
                     'environment' => [
                         "MYSQL_ROOT_PASSWORD=$mysqlRoot",
                         "MYSQL_DATABASE=$dbName",
@@ -188,6 +185,18 @@ EOT;
                 ],
             ],
         ];
+
+        if ($dbPort === 'random') {
+            $config['services'][$serviceName]['ports'] = [
+                "3306",
+            ];
+        }
+
+        if ($dbPort != '3306') {
+            $config['services'][$serviceName]['ports'] = [
+                "$dbPort:3306",
+            ];
+        }
 
         if ($answer) {
             $config['services'][$serviceName]['environment'][] = "MYSQL_USER=$userName";

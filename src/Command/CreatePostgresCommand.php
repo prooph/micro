@@ -91,9 +91,9 @@ class CreatePostgresCommand extends AbstractCommand
 
         $dbName = $helper->ask($input, $output, $question);
 
-        $question = new Question('Postgres port (defaults to "5432"): ', '5432');
+        $question = new Question('Postgres port (guest is 5432, defaults to random): ', 'random');
         $question->setValidator(function ($answer) {
-            if (! is_numeric($answer) || $answer === 0) {
+            if (! is_numeric($answer) && 'random' !== $answer) {
                 throw new \RuntimeException(
                     'Invalid MySQL port'
                 );
@@ -159,9 +159,6 @@ EOT;
             'services' => [
                 $serviceName => [
                     'image' => $image,
-                    'ports' => [
-                        "$dbPort:5432",
-                    ],
                     'environment' => [
                         "POSTGRES_USER=$userName",
                         "POSTGRES_PASSWORD=$password",
@@ -173,6 +170,18 @@ EOT;
                 ],
             ],
         ];
+
+        if ($dbPort === 'random') {
+            $config['services'][$serviceName]['ports'] = [
+                "5432",
+            ];
+        }
+
+        if ($dbPort != '5432') {
+            $config['services'][$serviceName]['ports'] = [
+                "$dbPort:5432",
+            ];
+        }
 
         if (null !== $initDb) {
             $config['services'][$serviceName]['volumes'][] = "$initDb:/docker-entrypoint-initdb.d";
