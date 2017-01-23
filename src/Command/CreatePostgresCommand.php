@@ -49,7 +49,7 @@ class CreatePostgresCommand extends AbstractCommand
 
         $question = new Question('Name of the service (f.e. postgres): ');
         $question->setValidator(function ($answer) {
-            if (! is_string($answer) || strlen($answer) === 0) {
+            if (! is_string($answer) || ! preg_match('/^[a-z-0-9]+$/', $answer)) {
                 throw new \RuntimeException(
                     'Invalid service name'
                 );
@@ -166,6 +166,9 @@ EOT;
                         "POSTGRES_USER=$userName",
                         "POSTGRES_PASSWORD=$password",
                         "POSTGRES_DB=$dbName",
+                    ],
+                    'labels' => [
+                        'prooph-pdo' => true,
                     ],
                 ],
             ],

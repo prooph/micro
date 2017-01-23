@@ -64,20 +64,6 @@ class SetupCommand extends AbstractCommand
 
         $gatewayDirectory = $helper->ask($input, $output, $question);
 
-        $question = new Question('Service directory (defaults to "service"): ', 'service');
-        $question->setValidator(function ($answer) {
-            if (! is_string($answer) || strlen($answer) === 0) {
-                throw new \RuntimeException(
-                    'Service directory cannot be empty'
-                );
-            }
-
-            return $answer;
-        });
-        $question->setMaxAttempts(2);
-
-        $serviceDirectory = $helper->ask($input, $output, $question);
-
         $question = new Question('HTTP port (defaults to "80"): ', '80');
         $question->setValidator(function ($answer) {
             if (! is_int((int) $answer) || $answer === 0) {
@@ -113,7 +99,6 @@ class SetupCommand extends AbstractCommand
 Setup will be done with the following configuration:
 
 Gateway directory: $gatewayDirectory
-Service directory: $serviceDirectory
 HTTP port: $httpPort
 HTTPS port: $httpsPort
 
@@ -132,10 +117,35 @@ EOT;
             $this->getRootDir() . '/docker-compose.yml',
             $this->generateConfigFile(
                 $gatewayDirectory,
-                $serviceDirectory,
                 $httpPort,
                 $httpsPort
             )
+        );
+
+        $gatewayConfig = <<<EOT
+server {
+    listen 80;
+    listen 443 ssl http2;
+    server_name localhost;
+    root /var/www/public;
+
+    index index.php;
+
+    include conf.d/basic.conf;
+
+    location / {
+       # This is cool because no php is touched for static content.
+       # include the "?\$args" part so non-default permalinks doesn't break when using query string
+       try_files \$uri \$uri/ 404;
+    }
+}
+EOT;
+
+        @mkdir($this->getRootDir() . '/' . $gatewayDirectory);
+
+        file_put_contents(
+            $this->getRootDir() . '/' . $gatewayDirectory . '/www.conf',
+            $gatewayConfig
         );
 
         $output->writeln('Successfully created microservice settings');
@@ -145,15 +155,10 @@ EOT;
 
     private function generateConfigFile(
         string $gatewayDirectory,
-        string $serviceDirectory,
         string $httpPort,
         string $httpsPort
     ): string {
         $config = <<<EOT
-# Generated prooph-micro docker-compose.yml file
-# Do not edit the first 4 comment lines, they are used by the micro-cli tool
-# gateway: $gatewayDirectory
-# service: $serviceDirectory
 version: '2'
 
 services:
@@ -164,6 +169,8 @@ services:
       - $httpsPort:443
     volumes:
       - ./$gatewayDirectory:/etc/nginx/sites-enabled:ro
+    labels:
+      - prooph-gateway-directory: ./$gatewayDirectory
 
 EOT;
 

@@ -49,7 +49,7 @@ class CreateMySqlCommand extends AbstractCommand
 
         $question = new Question('Name of the service (f.e. mysql): ');
         $question->setValidator(function ($answer) {
-            if (! is_string($answer) || strlen($answer) === 0) {
+            if (! is_string($answer) || ! preg_match('/^[a-z-0-9]+$/', $answer)) {
                 throw new \RuntimeException(
                     'Invalid service name'
                 );
@@ -181,6 +181,9 @@ EOT;
                     'environment' => [
                         "MYSQL_ROOT_PASSWORD=$mysqlRoot",
                         "MYSQL_DATABASE=$dbName",
+                    ],
+                    'labels' => [
+                        'prooph-pdo' => true,
                     ],
                 ],
             ],

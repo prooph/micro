@@ -29,7 +29,8 @@
         "prooph/php-cs-fixer-config": "^0.1.1",
         "beberlei/assert": "^2.7",
         "symfony/console": "^3.2.2",
-        "symfony/yaml": "^3.2.2"
+        "symfony/yaml": "^3.2.2",
+        "romanpitak/nginx-config-processor": "^0.2.1"
     },
     "require-dev": {
         "phpunit/phpunit": "^5.7",

@@ -20,9 +20,9 @@ abstract class AbstractCommand extends Command
     protected function getRootDir(): string
     {
         if (file_exists(__DIR__ . '/../../vendor/autoload.php')) {
-            return dirname(__DIR__ . '/../../');
+            return realpath(__DIR__ . '/../../');
         } elseif (file_exists(__DIR__ . '/../../../../autoload.php')) {
-            return dirname(__DIR__ . '/../../../../../');
+            return realpath(__DIR__ . '/../../../../../');
         }
     }
 
@@ -31,43 +31,12 @@ abstract class AbstractCommand extends Command
         $configFileName = $this->getRootDir() . '/docker-compose.yml';
         $configFile = file_get_contents($configFileName);
 
-        if (! preg_match('/^.+\n.+\n# gateway: (.+)\n# service: (.+)\n/', $configFile, $matches)) {
-            $error = <<<EOT
-docker-compose.yml is damaged! The first 4 lines should look similar to this:
-
-# Generated prooph-micro docker-compose.yml file
-# Do not edit the first 4 comment lines, they are used by the micro-cli tool
-# gateway: gateway
-# service: service
-
-Aborted!
-
-EOT;
-
-            throw new \RuntimeException($error);
-        }
-
-        $gateway = $matches[1];
-        $service = $matches[2];
-
         $oldConfig = Yaml::parse($configFile);
 
         if (array_key_exists($serviceName, $oldConfig['services'])) {
             throw new \RuntimeException('The requested service name "' . $serviceName . '" exists already.');
         }
 
-        $newConfig = array_merge_recursive($oldConfig, $config);
-
-        $newConfigString = <<<EOT
-# Generated prooph-micro docker-compose.yml file
-# Do not edit the first 4 comment lines, they are used by the micro-cli tool
-# gateway: $gateway
-# service: $service
-
-EOT;
-
-        $newConfigString .= Yaml::dump($newConfig, 10, 2);
-
-        file_put_contents($configFileName, $newConfigString);
+        file_put_contents($configFileName, Yaml::dump(array_merge_recursive($oldConfig, $config), 10, 2));
     }
 }
