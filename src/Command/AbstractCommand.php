@@ -20,15 +20,15 @@ abstract class AbstractCommand extends Command
     protected function getRootDir(): string
     {
         if (file_exists(__DIR__ . '/../../vendor/autoload.php')) {
-            return __DIR__ . '/../../';
+            return dirname(__DIR__ . '/../../');
         } elseif (file_exists(__DIR__ . '/../../../../autoload.php')) {
-            return __DIR__ . '/../../../../../';
+            return dirname(__DIR__ . '/../../../../../');
         }
     }
 
     protected function updateConfig(string $serviceName, array $config): void
     {
-        $configFileName = $this->getRootDir() . 'docker-compose.yml';
+        $configFileName = $this->getRootDir() . '/docker-compose.yml';
         $configFile = file_get_contents($configFileName);
 
         if (! preg_match('/^.+\n.+\n# gateway: (.+)\n# service: (.+)\n/', $configFile, $matches)) {

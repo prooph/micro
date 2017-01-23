@@ -38,7 +38,7 @@ class SetupCommand extends AbstractCommand
             return 0;
         }
 
-        if (file_exists($this->getRootDir() . 'docker-compose.yml')) {
+        if (file_exists($this->getRootDir() . '/docker-compose.yml')) {
             $output->writeln('docker-compose.yml exists already. Aborted.');
 
             return;
@@ -129,7 +129,7 @@ EOT;
         }
 
         file_put_contents(
-            $this->getRootDir() . 'docker-compose.yml',
+            $this->getRootDir() . '/docker-compose.yml',
             $this->generateConfigFile(
                 $gatewayDirectory,
                 $serviceDirectory,

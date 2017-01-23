@@ -39,7 +39,7 @@ class CreatePhpImageCommand extends AbstractCommand
             return 0;
         }
 
-        if (! file_exists($this->getRootDir() . 'docker-compose.yml')) {
+        if (! file_exists($this->getRootDir() . '/docker-compose.yml')) {
             $output->writeln('docker-compose.yml does not exist. Run ./bin/micro micro:setup. Aborted.');
 
             return 0;
