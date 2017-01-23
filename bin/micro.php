@@ -26,4 +26,6 @@ if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
 
 $application = new Application('Prooph-Micro CLI');
 $application->add(new Command\SetupCommand());
+$application->add(new Command\CreateMySqlCommand());
+$application->add(new Command\CreatePostgresCommand());
 $application->run();

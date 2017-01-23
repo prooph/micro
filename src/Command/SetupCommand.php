@@ -12,15 +12,13 @@ declare(strict_types=1);
 
 namespace Prooph\Micro\Command;
 
-use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Command\LockableTrait;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Console\Question\ChoiceQuestion;
 use Symfony\Component\Console\Question\ConfirmationQuestion;
 use Symfony\Component\Console\Question\Question;
 
-class SetupCommand extends Command
+class SetupCommand extends AbstractCommand
 {
     use LockableTrait;
 
@@ -47,7 +45,6 @@ class SetupCommand extends Command
         }
 
         $output->writeln('This setup will use the following docker-images:');
-        $output->writeln('prooph/php:7.1-fpm');
         $output->writeln('prooph/nginx:www (as webserver)');
         $output->writeln('');
 
@@ -109,63 +106,9 @@ class SetupCommand extends Command
 
         $httpsPort = $helper->ask($input, $output, $question);
 
-        $question = new ChoiceQuestion('Choose an event-store database (defaults to PostgreSQL)', ['MySQL', 'PostgreSQL'], 1);
-
-        $database = $helper->ask($input, $output, $question);
-
-        if ('PostgreSQL' === $database) {
-            $question = new Question('PostgreSQL port (defaults to "5432"): ', '5432');
-            $question->setValidator(function ($answer) {
-                if (! is_int((int) $answer) || $answer === 0) {
-                    throw new \RuntimeException(
-                        'Invalid PostgreSQL port'
-                    );
-                }
-
-                return $answer;
-            });
-            $question->setMaxAttempts(2);
-
-            $dbPort = $helper->ask($input, $output, $question);
-
-            $mysqlRoot = null;
-        } else {
-            $question = new Question('MySQL port (defaults to "3306"): ', '3306');
-            $question->setValidator(function ($answer) {
-                if (! is_int((int) $answer) || $answer === 0) {
-                    throw new \RuntimeException(
-                        'Invalid MySQL port'
-                    );
-                }
-
-                return $answer;
-            });
-            $question->setMaxAttempts(2);
-
-            $dbPort = $helper->ask($input, $output, $question);
-
-            $question = new Question('MySQL root password (defaults to ""): ', '');
-
-            $mysqlRoot = $helper->ask($input, $output, $question);
-        }
-
-        $question = new Question('Database name: ', false);
-        $question->setValidator(function ($answer) {
-            if (! is_string($answer) || strlen($answer) === 0) {
-                throw new \RuntimeException(
-                    'Database name cannot be empty'
-                );
-            }
-
-            return $answer;
-        });
-        $question->setMaxAttempts(2);
-
-        $dbName = $helper->ask($input, $output, $question);
-
         $question = <<<EOT
         
-###################################
+####################################################
 
 Setup will be done with the following configuration:
 
@@ -173,17 +116,9 @@ Gateway directory: $gatewayDirectory
 Service directory: $serviceDirectory
 HTTP port: $httpPort
 HTTPS port: $httpsPort
-Event-Store-Database: $database
-Database name: $dbName
 
+Are those settings correct? (y/n): 
 EOT;
-        if ('PostgreSQL' === $database) {
-            $question .= "PostgreSQL port: $dbPort\n";
-        } else {
-            $question .= "MySQL port: $dbPort\nMySQL root password: $mysqlRoot\n";
-        }
-
-        $question .= "\nAre those settings correct? (y/n):";
 
         $confirmation = new ConfirmationQuestion($question, false);
 
@@ -199,11 +134,7 @@ EOT;
                 $gatewayDirectory,
                 $serviceDirectory,
                 $httpPort,
-                $httpsPort,
-                $database,
-                $dbPort,
-                $dbName,
-                $mysqlRoot
+                $httpsPort
             )
         );
 
@@ -216,11 +147,7 @@ EOT;
         string $gatewayDirectory,
         string $serviceDirectory,
         string $httpPort,
-        string $httpsPort,
-        string $database,
-        string $dbPort,
-        string $dbName,
-        string $mysqlRoot = null
+        string $httpsPort
     ): string {
         $config = <<<EOT
 # Generated prooph-micro docker-compose.yml file
@@ -240,46 +167,6 @@ services:
 
 EOT;
 
-        if ('PostgreSQL' === $database) {
-            $config .= <<<EOT
-  postgres:
-    image: postgres:alpine
-    ports:
-      - $dbPort:5432
-    volumes:
-      - ./vendor/prooph/pdo-event-store/scripts/postgres:/docker-entrypoint-initdb.d
-    environment:
-      - POSTGRES_DB=$dbName
-EOT;
-        } else {
-            $config .= <<<EOT
-  mysql:
-    image: mysql
-    ports:
-     - $dbPort:3306
-    volumes:
-      - ./vendor/prooph/pdo-event-store/scripts/mysql:/docker-entrypoint-initdb.d
-    environment:
-      - MYSQL_ROOT_PASSWORD=$mysqlRoot
-      - MYSQL_DATABASE=$dbName
-EOT;
-
-            if (empty($mysqlRoot)) {
-                $config .= "\n      - MYSQL_ALLOW_EMPTY_PASSWORD=yes";
-            }
-
-            $config .= "\n";
-        }
-
         return $config;
-    }
-
-    private function getRootDir(): string
-    {
-        if (file_exists(__DIR__ . '/../../vendor/autoload.php')) {
-            return __DIR__ . '/../../';
-        } elseif (file_exists(__DIR__ . '/../../../../autoload.php')) {
-            return __DIR__ . '/../../../../../';
-        }
     }
 }
