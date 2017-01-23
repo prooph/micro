@@ -90,7 +90,7 @@ class SetupCommand extends AbstractCommand
             $question->setMaxAttempts(2);
 
             $httpPort = $io->askQuestion($question);
-            $configMessages[] = '<info>HTTP port:</info> '.($httpPort?:'random');
+            $configMessages[] = '<info>HTTP port:</info> '.($httpPort ?: 'random');
 
             $question = new Question('HTTPS port: ', 'random');
             $question->setValidator(function ($answer) {
@@ -110,7 +110,7 @@ class SetupCommand extends AbstractCommand
             $question->setMaxAttempts(2);
 
             $httpsPort = $io->askQuestion($question);
-            $configMessages[] = '<info>HTTPS port:</info> '.($httpsPort?:'random');
+            $configMessages[] = '<info>HTTPS port:</info> '.($httpsPort ?: 'random');
         }
 
         $io->section('Setup will be done with the following configuration:');
@@ -167,7 +167,6 @@ EOT;
         string $httpPort = null,
         string $httpsPort = null
     ): string {
-
         $config = [
             'version' => '2',
             'services' => [
