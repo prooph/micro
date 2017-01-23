@@ -148,12 +148,10 @@ class CreatePhpServiceCommand extends AbstractCommand
             $useNginxConfig = true;
             $labels = $currentConfig['services']['nginx']['labels'];
 
-            foreach ($labels as $label) {
-                foreach ($label as $key => $value) {
-                    if ('prooph-gateway-directory' === $key) {
-                        $gatewayFile = $this->getRootDir() . '/' . $value . '/www.conf';
-                        break 2;
-                    }
+            foreach ($labels as $key => $value) {
+                if ('prooph-gateway-directory' === $key) {
+                    $gatewayFile = $this->getRootDir() . '/' . $value . '/www.conf';
+                    break;
                 }
             }
 

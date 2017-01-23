@@ -167,7 +167,7 @@ services:
     volumes:
       - ./$gatewayDirectory:/etc/nginx/sites-enabled:ro
     labels:
-      - prooph-gateway-directory: ./$gatewayDirectory
+      prooph-gateway-directory: ./$gatewayDirectory
 EOT;
 
         if ($httpPort !== '80' || $httpsPort !== '443') {
@@ -178,7 +178,7 @@ EOT;
             $config .= "      - $httpPort:80\n";
         }
 
-        if ($httpsPort !== '433') {
+        if ($httpsPort !== '443') {
             $config .= "      - $httpsPort:443\n";
         }
 
