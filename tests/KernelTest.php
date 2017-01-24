@@ -67,15 +67,9 @@ class KernelTest extends TestCase
             return $snapshotStore;
         };
 
-        $producerFactory = function () {
-            return function (Message $message): void {
-            };
-        };
-
         $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher(
             $commandMap,
             $eventStoreFactory,
-            $producerFactory,
             $snapshotStoreFactory
         );
 
@@ -83,80 +77,7 @@ class KernelTest extends TestCase
         $command->messageName()->willReturn('some_command')->shouldBeCalled();
 
         $result = $dispatch($command->reveal());
-        $this->assertEquals(['some' => 'state'], $result);
-    }
-
-    /**
-     * @test
-     */
-    public function it_builds_command_dispatcher_and_dispatches_with_transactional_publishing(): void
-    {
-        $commandMap = [
-            'some_command' => [
-                'handler' => function (array $state, Message $message): AggregateResult {
-                    return new AggregateResult(['some' => 'state']);
-                },
-                'definition' => TestAggregateDefinition::class,
-            ],
-        ];
-
-        $eventStoreFactory = function (): EventStore {
-            static $eventStore = null;
-
-            if (null === $eventStore) {
-                $eventStore = $this->prophesize(EventStore::class);
-                $eventStore->hasStream('foo')->willReturn(true)->shouldBeCalled();
-                $eventStore->load(Argument::type(StreamName::class), 1, null, null)->willReturn(new Stream(new StreamName('foo'), new \ArrayIterator()))->shouldBeCalled();
-                $eventStore->appendTo(Argument::type(StreamName::class), Argument::type(\Iterator::class))->shouldBeCalled();
-                $eventStore = $eventStore->reveal();
-            }
-
-            return $eventStore;
-        };
-
-        $snapshotStoreFactory = function (): SnapshotStore {
-            static $snapshotStore = null;
-
-            if (null === $snapshotStore) {
-                $snapshotStore = new InMemorySnapshotStore();
-            }
-
-            return $snapshotStore;
-        };
-
-        $producerFactory = function () {
-            return function (Message $message): void {
-            };
-        };
-
-        $started = false;
-        $commited = false;
-
-        $start = function () use (&$started) {
-            $started = true;
-        };
-
-        $commit = function () use (&$commited) {
-            $commited = true;
-        };
-
-        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher(
-            $commandMap,
-            $eventStoreFactory,
-            $producerFactory,
-            $snapshotStoreFactory,
-            $start,
-            $commit
-        );
-
-        $command = $this->prophesize(Message::class);
-        $command->messageName()->willReturn('some_command')->shouldBeCalled();
-
-        $result = $dispatch($command->reveal());
-
-        $this->assertEquals(['some' => 'state'], $result);
-        $this->assertTrue($started);
-        $this->assertTrue($commited);
+        $this->assertEquals(['some' => 'state'], $result->state());
     }
 
     /**
@@ -196,15 +117,9 @@ class KernelTest extends TestCase
             return $snapshotStore;
         };
 
-        $producerFactory = function (): callable {
-            return function (Message $message): void {
-            };
-        };
-
         $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher(
             $commandMap,
             $eventStoreFactory,
-            $producerFactory,
             $snapshotStoreFactory
         );
 
@@ -374,31 +289,6 @@ class KernelTest extends TestCase
         $this->assertInstanceOf(AggregateResult::class, $result);
         $this->assertSame([$enrichedMessage], $result->raisedEvents());
         $this->assertEquals(['foo' => 'bar'], $result->state());
-    }
-
-    /**
-     * @test
-     */
-    public function it_publishes_events(): void
-    {
-        $message = $this->prophesize(Message::class);
-        $message->messageType()->willReturn(Message::TYPE_EVENT)->shouldBeCalled();
-
-        $raisedEvents = [$message->reveal()];
-
-        $aggregateResult = new AggregateResult(['foo' => 'bar'], ...$raisedEvents);
-
-        $published = false;
-
-        $factory = function () use (&$published) {
-            return function (Message $message) use (&$published): void {
-                $published = true;
-            };
-        };
-
-        $result = f\publishEvents($aggregateResult, $factory);
-
-        $this->assertSame($aggregateResult, $result);
     }
 
     /**

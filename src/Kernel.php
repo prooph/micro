@@ -15,6 +15,7 @@ namespace Prooph\Micro\Kernel;
 use ArrayIterator;
 use Iterator;
 use Prooph\Common\Messaging\Message;
+use Prooph\EventStore\EventStore;
 use Prooph\EventStore\Metadata\MetadataMatcher;
 use Prooph\EventStore\Stream;
 use Prooph\EventStore\StreamName;
@@ -30,7 +31,7 @@ const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
  * builds a dispatcher to return a function that receives a messages and return the state
  *
  * usage:
- * $dispatch = buildDispatcher($commandMap, $eventStoreFactory, $producerFactory, $snapshotStoreFactory);
+ * $dispatch = buildDispatcher($commandMap, $eventStoreFactory, $snapshotStoreFactory);
  * $state = $dispatch($message);
  *
  * $producerFactory is expected to be a callback that returns an instance of Prooph\ServiceBus\Async\MessageProducer.
@@ -52,18 +53,12 @@ const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
 function buildCommandDispatcher(
     array $commandMap,
     callable $eventStoreFactory,
-    callable $producerFactory,
-    callable $snapshotStoreFactory = null,
-    callable $startProducerTransaction = null,
-    callable $commitProducerTransaction = null
+    callable $snapshotStoreFactory = null
 ): callable {
     return function (Message $message) use (
         $commandMap,
         $eventStoreFactory,
-        $snapshotStoreFactory,
-        $producerFactory,
-        $startProducerTransaction,
-        $commitProducerTransaction
+        $snapshotStoreFactory
     ) {
         $getDefinition = function (Message $message) use ($commandMap): AggregateDefiniton {
             return getAggregateDefinition($message, $commandMap);
@@ -115,27 +110,12 @@ function buildCommandDispatcher(
             return persistEvents($aggregateResult, $eventStoreFactory, $definition, $definition->extractAggregateId($message));
         };
 
-        $publishEvents = function (AggregateResult $aggregateResult) use (
-            $producerFactory,
-            $startProducerTransaction,
-            $commitProducerTransaction
-        ): AggregateResult {
-            return publishEvents(
-                $aggregateResult,
-                $producerFactory,
-                $startProducerTransaction,
-                $commitProducerTransaction
-            );
-        };
-
         return pipleline(
             $getDefinition,
             $loadState,
             $reconstituteState,
             $handleCommand,
-            $persistEvents,
-            $publishEvents,
-            aggregateState
+            $persistEvents
         )($message);
     };
 }
@@ -181,6 +161,10 @@ function loadEvents(
 ): Iterator {
     $eventStore = $eventStoreFactory();
 
+    if (! $eventStore instanceof EventStore) {
+        throw new RuntimeException('$eventStoreFactory did not return an instance of ' . EventStore::class);
+    }
+
     if ($eventStore->hasStream($streamName)) {
         return $eventStore->load($streamName, 1, null, $metadataMatcher)->streamEvents();
     }
@@ -215,6 +199,10 @@ function persistEvents(
 
     $eventStore = $eventStoreFactory();
 
+    if (! $eventStore instanceof EventStore) {
+        throw new RuntimeException('$eventStoreFactory did not return an instance of ' . EventStore::class);
+    }
+
     if ($eventStore->hasStream($streamName)) {
         $eventStore->appendTo($streamName, new \ArrayIterator($events));
     } else {
@@ -222,43 +210,6 @@ function persistEvents(
     }
 
     return new AggregateResult($aggregateResult->state(), ...$events);
-}
-
-const publishEvents = 'Prooph\Micro\Kernel\publishEvents';
-
-function publishEvents(
-    AggregateResult $aggregateResult,
-    callable $producerCallback,
-    callable $startProducerTransaction = null,
-    callable $commitProducerTransaction = null
-): AggregateResult {
-    $producer = null;
-    $commit = false;
-
-    if (null !== $startProducerTransaction && null !== $commitProducerTransaction) {
-        $commit = true;
-        $startProducerTransaction();
-    }
-
-    foreach ($aggregateResult->raisedEvents() as $event) {
-        if (null === $producer) {
-            $producer = $producerCallback();
-        }
-        $producer($event);
-    }
-
-    if ($commit) {
-        $commitProducerTransaction();
-    }
-
-    return $aggregateResult;
-}
-
-const aggregateState = 'Prooph\Micro\Kernel\aggregateState';
-
-function aggregateState(AggregateResult $aggregateResult): array
-{
-    return $aggregateResult->state();
 }
 
 const getHandler = 'Prooph\Micro\Kernel\getHandler';
