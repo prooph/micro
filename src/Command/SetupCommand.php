@@ -48,6 +48,8 @@ class SetupCommand extends AbstractCommand
         if (file_exists($this->getRootDir() . '/docker-compose.yml')) {
             $io->warning('docker-compose.yml exists already. Aborted.');
 
+            $this->release();
+
             return 1;
         }
 
@@ -80,7 +82,7 @@ class SetupCommand extends AbstractCommand
                     return '';
                 }
 
-                if (! is_int((int) $answer) || $answer === 0) {
+                if (! is_int((int) $answer) || 0 === (int) $answer) {
                     throw new \RuntimeException(
                         'Invalid HTTP port'
                     );
@@ -100,7 +102,7 @@ class SetupCommand extends AbstractCommand
                     return '';
                 }
 
-                if (! is_int((int) $answer) || $answer === 0) {
+                if (! is_int((int) $answer) || 0 === (int) $answer) {
                     throw new \RuntimeException(
                         'Invalid HTTPS port'
                     );
@@ -121,6 +123,8 @@ class SetupCommand extends AbstractCommand
         if (! $io->confirm('Are those settings correct?', false)) {
             $io->writeln('<comment>Aborted</comment>');
 
+            $this->release();
+
             return 1;
         }
 
@@ -132,6 +136,10 @@ class SetupCommand extends AbstractCommand
                 $httpsPort
             )
         );
+
+        if (!is_dir($this->getRootDir() . '/' . $gatewayDirectory)) {
+            mkdir($this->getRootDir() . '/' . $gatewayDirectory, 0777, true);
+        }
 
         $this->generateNginxConfig($gatewayDirectory)
             ->saveToFile($this->getRootDir() . '/' . $gatewayDirectory . '/www.conf');
