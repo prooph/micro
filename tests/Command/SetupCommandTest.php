@@ -26,6 +26,8 @@ final class SetupCommandTest extends TestCase
 
     public function setUp(): void
     {
+        $this->prepareTempDirectory();
+
         /** @var SetupCommand $command */
         $command = $this->getMockBuilder(SetupCommand::class)
             ->setMethods(['getRootDir'])
@@ -33,7 +35,7 @@ final class SetupCommandTest extends TestCase
 
         $command
             ->method('getRootDir')
-            ->willReturn(sys_get_temp_dir());
+            ->willReturn($this->getTempDirectory());
 
         $application = new Application();
         $application->add($command);
@@ -43,7 +45,7 @@ final class SetupCommandTest extends TestCase
 
     public function tearDown(): void
     {
-        $this->removeTempFiles();
+        $this->removeTempDirectory();
     }
 
     /**
@@ -52,12 +54,12 @@ final class SetupCommandTest extends TestCase
     public function it_creates_config_files(): void
     {
         $commandTester = new CommandTester($this->command);
-        $commandTester->setInputs(['gateway', '80', '443', 'y']);
+        $commandTester->setInputs(['80', '443', 'y']);
         $commandTester->execute([]);
 
         $this->assertSame(0, $commandTester->getStatusCode());
-        $this->assertTrue(file_exists(sys_get_temp_dir() . '/gateway/www.conf'));
-        $this->assertTrue(file_exists(sys_get_temp_dir() . '/docker-compose.yml'));
+        $this->assertTrue(file_exists($this->getTempDirectory() . '/gateway/www.conf'));
+        $this->assertTrue(file_exists($this->getTempDirectory() . '/docker-compose.yml'));
     }
 
     /**
@@ -76,16 +78,13 @@ final class SetupCommandTest extends TestCase
     public function getValidInputParameters(): array
     {
         return [
-            [['', '', '', 'y']],
-            [['', '80', '443', 'y']],
-            [['gateway', '80', '443', 'y']],
-            [['another/dir', '80', '443', 'y']],
-            [['gateway', '8080', '443', 'y']],
-            [['gateway', '', '443', 'y']],
-            [['gateway', 'random', '443', 'y']],
-            [['gateway', '80', '', 'y']],
-            [['gateway', '80', 'random', 'y']],
-            [['gateway', '', '', 'y']],
+            [['', '', 'y']],
+            [['80', '443', 'y']],
+            [['8080', '443', 'y']],
+            [['', '443', 'y']],
+            [['random', '443', 'y']],
+            [['80', '', 'y']],
+            [['80', 'random', 'y']],
         ];
     }
 
@@ -114,7 +113,7 @@ final class SetupCommandTest extends TestCase
      */
     public function it_exits_if_docker_compose_file_already_exists(): void
     {
-        touch(sys_get_temp_dir() . '/docker-compose.yml');
+        touch($this->getTempDirectory() . '/docker-compose.yml');
 
         $commandTester = new CommandTester($this->command);
         $commandTester->execute([]);
@@ -123,30 +122,29 @@ final class SetupCommandTest extends TestCase
         $this->assertRegExp('/docker-compose.yml exists already/', $commandTester->getDisplay());
     }
 
-    private function removeTempFiles(): void
+    private function getTempDirectory(): string
     {
-        $files = ['gateway', 'docker-compose.yml'];
+        return sys_get_temp_dir() . '/prooph_test';
+    }
 
-        foreach ($files as $file) {
-            if (is_file(sys_get_temp_dir() . '/' . $file)) {
-                unlink(sys_get_temp_dir() . '/' . $file);
-            }
-
-            if (is_dir(sys_get_temp_dir() . '/' . $file)) {
-                $files = new \RecursiveIteratorIterator(
-                    new \RecursiveDirectoryIterator(
-                        sys_get_temp_dir() . '/' . $file,
-                        \RecursiveDirectoryIterator::SKIP_DOTS
-                    ),
-                    \RecursiveIteratorIterator::CHILD_FIRST
-                );
-
-                foreach ($files as $fileInfo) {
-                    $fileInfo->isDir() ? rmdir($fileInfo->getRealPath()) : unlink($fileInfo->getRealPath());
-                }
-
-                rmdir(sys_get_temp_dir() . '/' . $file);
-            }
+    private function prepareTempDirectory(): void
+    {
+        if (!is_dir($this->getTempDirectory() . '/gateway')) {
+            mkdir($this->getTempDirectory() . '/gateway', 0777, true);
         }
+    }
+
+    private function removeTempDirectory(): void
+    {
+        $files = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($this->getTempDirectory(), \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+
+        foreach ($files as $fileInfo) {
+            $fileInfo->isDir() ? rmdir($fileInfo->getRealPath()) : unlink($fileInfo->getRealPath());
+        }
+
+        rmdir($this->getTempDirectory());
     }
 }
