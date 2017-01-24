@@ -17,8 +17,14 @@ use Prooph\Common\Messaging\Message;
 
 final class AggregateResult
 {
+    /**
+     * @var Message[]
+     */
     private $raisedEvents;
 
+    /**
+     * @var array
+     */
     private $state;
 
     public function __construct(array $state, Message ...$raisedEvents)

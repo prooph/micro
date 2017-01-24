@@ -47,43 +47,32 @@ $commandMap = [
 $dispatch = Kernel\buildCommandDispatcher(
     $commandMap,
     $factories['eventStore'],
-    $factories['dummyProducer'],
     $factories['snapshotStore']
 );
 
-// uncomment to enable amqp publisher
-//$dispatch = Kernel\buildCommandDispatcher(
-//    $commandMap,
-//    $factories['eventStore'],
-//    $factories['amqpProducer'],
-//    $factories['snapshotStore'],
-//    $factories['startAmqpTransaction'],
-//    $factories['commitAmqpTransaction']
-//);
-
 $command = new RegisterUser(['id' => '1', 'name' => 'Alex', 'email' => 'member@getprooph.org']);
 
-$state = $dispatch($command);
+$aggregateResult = $dispatch($command);
 
 echo "User was registered: \n";
-echo json_encode($state) . "\n\n";
+echo json_encode($aggregateResult->state()) . "\n\n";
 
-$state = $dispatch(new ChangeUserName(['id' => '1', 'name' => 'Sascha']));
+$aggregateResult = $dispatch(new ChangeUserName(['id' => '1', 'name' => 'Sascha']));
 
 echo "Username changed: \n";
-echo json_encode($state) . "\n\n";
+echo json_encode($aggregateResult->state()) . "\n\n";
 
 // should return a TypeError
-$state = $dispatch(new InvalidCommand());
+$throwable = $dispatch(new InvalidCommand());
 
-echo get_class($state) . "\n";
-echo $state->getMessage() . "\n\n";
+echo get_class($throwable) . "\n";
+echo $throwable->getMessage() . "\n\n";
 
-$state = $dispatch(new UnknownCommand());
+$throwable = $dispatch(new UnknownCommand());
 
 // should return a RuntimeException
-echo get_class($state) . "\n";
-echo $state->getMessage() . "\n\n";
+echo get_class($throwable) . "\n";
+echo $throwable->getMessage() . "\n\n";
 
 $time = microtime(true) - $start;
 
