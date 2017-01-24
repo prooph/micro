@@ -137,7 +137,7 @@ class SetupCommand extends AbstractCommand
             )
         );
 
-        if (!is_dir($this->getRootDir() . '/' . $gatewayDirectory)) {
+        if (! is_dir($this->getRootDir() . '/' . $gatewayDirectory)) {
             mkdir($this->getRootDir() . '/' . $gatewayDirectory, 0777, true);
         }
 
@@ -197,8 +197,7 @@ class SetupCommand extends AbstractCommand
                         ->addDirective(Directive::create('try_files', '\$uri \$uri/ 404'))
                     ))
                 )
-            )
-        ;
+            );
 
         return $config;
     }
