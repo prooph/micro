@@ -141,8 +141,7 @@ class SetupCommand extends AbstractCommand
             mkdir($this->getRootDir() . '/' . $gatewayDirectory, 0777, true);
         }
 
-        $this->generateNginxConfig($gatewayDirectory)
-            ->saveToFile($this->getRootDir() . '/' . $gatewayDirectory . '/www.conf');
+        $this->generateNginxConfig()->saveToFile($this->getRootDir() . '/' . $gatewayDirectory . '/www.conf');
 
         $io->success('Successfully created microservice settings');
 
@@ -182,7 +181,7 @@ class SetupCommand extends AbstractCommand
         return Yaml::dump($config, 4);
     }
 
-    private function generateNginxConfig(string $gatewayDirectory): Scope
+    private function generateNginxConfig(): Scope
     {
         $config = Scope::create()
             ->addDirective(Directive::create('server')
