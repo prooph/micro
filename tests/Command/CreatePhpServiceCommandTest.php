@@ -1,4 +1,6 @@
-<?php declare(strict_types = 1);
+<?php
+
+declare(strict_types=1);
 
 namespace ProophTest\Micro\Command;
 
@@ -63,7 +65,7 @@ final class CreatePhpServiceCommandTest extends TestCase
 
     private function prepareTempDirectory(): void
     {
-        if (!is_dir($this->getTempDirectory() . '/gateway')) {
+        if (! is_dir($this->getTempDirectory() . '/gateway')) {
             mkdir($this->getTempDirectory() . '/gateway', 0777, true);
         }
 
