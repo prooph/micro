@@ -129,7 +129,7 @@ final class SetupCommandTest extends TestCase
 
     private function prepareTempDirectory(): void
     {
-        if (!is_dir($this->getTempDirectory() . '/gateway')) {
+        if (! is_dir($this->getTempDirectory() . '/gateway')) {
             mkdir($this->getTempDirectory() . '/gateway', 0777, true);
         }
     }
