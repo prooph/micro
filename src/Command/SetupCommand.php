@@ -14,9 +14,11 @@ namespace Prooph\Micro\Command;
 
 use Symfony\Component\Console\Command\LockableTrait;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Console\Question\ConfirmationQuestion;
 use Symfony\Component\Console\Question\Question;
+use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Component\Yaml\Yaml;
 
 class SetupCommand extends AbstractCommand
 {
@@ -27,30 +29,30 @@ class SetupCommand extends AbstractCommand
         $this
             ->setName('micro:setup')
             ->setDescription('Setup a prooph-micro application')
-            ->setHelp('This command creates the skeleton for a prooph-micro(services) application.');
+            ->setHelp('This command creates the skeleton for a prooph-micro(services) application.')
+            ->addOption('no-ports', null, InputOption::VALUE_NONE, 'Do not publish ports on docker host.');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
+        $io = new SymfonyStyle($input, $output);
+
         if (! $this->lock()) {
-            $output->writeln('The command is already running in another process.');
+            $io->warning('The command is already running in another process.');
 
             return 0;
         }
 
         if (file_exists($this->getRootDir() . '/docker-compose.yml')) {
-            $output->writeln('docker-compose.yml exists already. Aborted.');
+            $io->warning('docker-compose.yml exists already. Aborted.');
 
             return;
         }
 
-        $output->writeln('This setup will use the following docker-images:');
-        $output->writeln('prooph/nginx:www (as webserver)');
-        $output->writeln('');
+        $io->section('This setup will use the following docker-images:');
+        $io->listing(['prooph/nginx:www (as webserver)']);
 
-        $helper = $this->getHelper('question');
-
-        $question = new Question('Gateway directory (defaults to "gateway"): ', 'gateway');
+        $question = new Question('Gateway directory', 'gateway');
         $question->setValidator(function ($answer) {
             if (! is_string($answer) || strlen($answer) === 0) {
                 throw new \RuntimeException(
@@ -60,55 +62,62 @@ class SetupCommand extends AbstractCommand
 
             return $answer;
         });
+
         $question->setMaxAttempts(2);
 
-        $gatewayDirectory = $helper->ask($input, $output, $question);
+        $gatewayDirectory = $io->askQuestion($question);
+        $configMessages[] = "<info>Gateway directory:</info> $gatewayDirectory";
 
-        $question = new Question('HTTP port (defaults to "80"): ', '80');
-        $question->setValidator(function ($answer) {
-            if (! is_int((int) $answer) || $answer === 0) {
-                throw new \RuntimeException(
-                    'Invalid HTTP port'
-                );
-            }
+        $httpPort = null;
+        $httpsPort = null;
 
-            return $answer;
-        });
-        $question->setMaxAttempts(2);
+        if (! $input->getOption('no-ports')) {
+            $question = new Question('HTTP port: ', 'random');
+            $question->setValidator(function ($answer) {
+                if ('random' === $answer) {
+                    return '';
+                }
 
-        $httpPort = $helper->ask($input, $output, $question);
+                if (! is_int((int) $answer) || $answer === 0) {
+                    throw new \RuntimeException(
+                        'Invalid HTTP port'
+                    );
+                }
 
-        $question = new Question('HTTPS port (defaults to "443"): ', '443');
-        $question->setValidator(function ($answer) {
-            if (! is_int((int) $answer) || $answer === 0) {
-                throw new \RuntimeException(
-                    'Invalid HTTPS port'
-                );
-            }
+                return $answer;
+            });
 
-            return $answer;
-        });
-        $question->setMaxAttempts(2);
+            $question->setMaxAttempts(2);
 
-        $httpsPort = $helper->ask($input, $output, $question);
+            $httpPort = $io->askQuestion($question);
+            $configMessages[] = '<info>HTTP port:</info> '.($httpPort ?: 'random');
 
-        $question = <<<EOT
-        
-####################################################
+            $question = new Question('HTTPS port: ', 'random');
+            $question->setValidator(function ($answer) {
+                if ('random' === $answer) {
+                    return '';
+                }
 
-Setup will be done with the following configuration:
+                if (! is_int((int) $answer) || $answer === 0) {
+                    throw new \RuntimeException(
+                        'Invalid HTTPS port'
+                    );
+                }
 
-Gateway directory: $gatewayDirectory
-HTTP port: $httpPort
-HTTPS port: $httpsPort
+                return $answer;
+            });
 
-Are those settings correct? (y/n): 
-EOT;
+            $question->setMaxAttempts(2);
 
-        $confirmation = new ConfirmationQuestion($question, false);
+            $httpsPort = $io->askQuestion($question);
+            $configMessages[] = '<info>HTTPS port:</info> '.($httpsPort ?: 'random');
+        }
 
-        if (! $helper->ask($input, $output, $confirmation)) {
-            $output->writeln('Aborted');
+        $io->section('Setup will be done with the following configuration:');
+        $io->listing($configMessages);
+
+        if (! $io->confirm('Are those settings correct?', false)) {
+            $io->writeln('<comment>Aborted</comment>');
 
             return;
         }
@@ -148,40 +157,39 @@ EOT;
             $gatewayConfig
         );
 
-        $output->writeln('Successfully created microservice settings');
+        $io->success('Successfully created microservice settings');
 
         $this->release();
     }
 
     private function generateConfigFile(
         string $gatewayDirectory,
-        string $httpPort,
-        string $httpsPort
+        string $httpPort = null,
+        string $httpsPort = null
     ): string {
-        $config = <<<EOT
-version: '2'
+        $config = [
+            'version' => '2',
+            'services' => [
+                'nginx' => [
+                    'image' => 'prooph/nginx:www',
+                    'volumes' => [
+                        "./$gatewayDirectory:/etc/nginx/sites-enabled:ro",
+                    ],
+                    'labels' => [
+                        'prooph-gateway-directory' => "./$gatewayDirectory",
+                    ],
+                ],
+            ],
+        ];
 
-services:
-  nginx:
-    image: prooph/nginx:www
-    volumes:
-      - ./$gatewayDirectory:/etc/nginx/sites-enabled:ro
-    labels:
-      prooph-gateway-directory: ./$gatewayDirectory
-EOT;
-
-        if ($httpPort !== '80' || $httpsPort !== '443') {
-            $config .= "\n    ports:\n";
+        if (null !== $httpPort) {
+            $config['services']['nginx']['ports'][] = '' !== $httpPort ? "$httpPort:80" : '80';
         }
 
-        if ($httpPort !== '80') {
-            $config .= "      - $httpPort:80\n";
+        if (null !== $httpsPort) {
+            $config['services']['nginx']['ports'][] = '' !== $httpsPort ? "$httpsPort:443" : '443';
         }
 
-        if ($httpsPort !== '443') {
-            $config .= "      - $httpsPort:443\n";
-        }
-
-        return $config;
+        return Yaml::dump($config, 4);
     }
 }
