@@ -12,6 +12,8 @@ declare(strict_types=1);
 
 namespace Prooph\Micro\Command;
 
+use RomanPitak\Nginx\Config\Directive;
+use RomanPitak\Nginx\Config\Scope;
 use Symfony\Component\Console\Command\LockableTrait;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -33,20 +35,22 @@ class SetupCommand extends AbstractCommand
             ->addOption('no-ports', null, InputOption::VALUE_NONE, 'Do not publish ports on docker host.');
     }
 
-    protected function execute(InputInterface $input, OutputInterface $output)
+    protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
 
         if (! $this->lock()) {
-            $io->warning('The command is already running in another process.');
+            $io->warning('The command is already running in another process. Aborted.');
 
-            return 0;
+            return 1;
         }
 
         if (file_exists($this->getRootDir() . '/docker-compose.yml')) {
             $io->warning('docker-compose.yml exists already. Aborted.');
 
-            return;
+            $this->release();
+
+            return 1;
         }
 
         $io->section('This setup will use the following docker-images:');
@@ -78,7 +82,7 @@ class SetupCommand extends AbstractCommand
                     return '';
                 }
 
-                if (! is_int((int) $answer) || $answer === 0) {
+                if (! is_int((int) $answer) || 0 === (int) $answer) {
                     throw new \RuntimeException(
                         'Invalid HTTP port'
                     );
@@ -98,7 +102,7 @@ class SetupCommand extends AbstractCommand
                     return '';
                 }
 
-                if (! is_int((int) $answer) || $answer === 0) {
+                if (! is_int((int) $answer) || 0 === (int) $answer) {
                     throw new \RuntimeException(
                         'Invalid HTTPS port'
                     );
@@ -119,7 +123,9 @@ class SetupCommand extends AbstractCommand
         if (! $io->confirm('Are those settings correct?', false)) {
             $io->writeln('<comment>Aborted</comment>');
 
-            return;
+            $this->release();
+
+            return 1;
         }
 
         file_put_contents(
@@ -131,35 +137,17 @@ class SetupCommand extends AbstractCommand
             )
         );
 
-        $gatewayConfig = <<<EOT
-server {
-    listen 80;
-    listen 443 ssl http2;
-    server_name localhost;
-    root /var/www/public;
+        if (! is_dir($this->getRootDir() . '/' . $gatewayDirectory)) {
+            mkdir($this->getRootDir() . '/' . $gatewayDirectory, 0777, true);
+        }
 
-    index index.php;
-
-    include conf.d/basic.conf;
-
-    location / {
-       # This is cool because no php is touched for static content.
-       # include the "?\$args" part so non-default permalinks doesn't break when using query string
-       try_files \$uri \$uri/ 404;
-    }
-}
-EOT;
-
-        @mkdir($this->getRootDir() . '/' . $gatewayDirectory);
-
-        file_put_contents(
-            $this->getRootDir() . '/' . $gatewayDirectory . '/www.conf',
-            $gatewayConfig
-        );
+        $this->generateNginxConfig()->saveToFile($this->getRootDir() . '/' . $gatewayDirectory . '/www.conf');
 
         $io->success('Successfully created microservice settings');
 
         $this->release();
+
+        return 0;
     }
 
     private function generateConfigFile(
@@ -191,5 +179,25 @@ EOT;
         }
 
         return Yaml::dump($config, 4);
+    }
+
+    private function generateNginxConfig(): Scope
+    {
+        $config = Scope::create()
+            ->addDirective(Directive::create('server')
+                ->setChildScope(Scope::create()
+                    ->addDirective(Directive::create('listen', '80'))
+                    ->addDirective(Directive::create('listen', '443 ssl http2'))
+                    ->addDirective(Directive::create('server_name', 'localhost'))
+                    ->addDirective(Directive::create('root', '/var/www/public'))
+                    ->addDirective(Directive::create('index', 'index.php'))
+                    ->addDirective(Directive::create('include', ' conf.d/basic.conf'))
+                    ->addDirective(Directive::create('location', '/', Scope::create()
+                        ->addDirective(Directive::create('try_files', '\$uri \$uri/ 404'))
+                    ))
+                )
+            );
+
+        return $config;
     }
 }
