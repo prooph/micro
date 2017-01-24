@@ -12,9 +12,9 @@ declare(strict_types=1);
 
 namespace Prooph\Micro\Command;
 
-use Madkom\NginxConfigurator\Config\Server;
 use Madkom\NginxConfigurator\Builder;
 use Madkom\NginxConfigurator\Config\Location;
+use Madkom\NginxConfigurator\Config\Server;
 use Madkom\NginxConfigurator\Config\Upstream;
 use Madkom\NginxConfigurator\Node\Directive;
 use Madkom\NginxConfigurator\Node\Node;
@@ -24,7 +24,6 @@ use Symfony\Component\Console\Command\LockableTrait;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Question\ChoiceQuestion;
-use Symfony\Component\Console\Question\ConfirmationQuestion;
 use Symfony\Component\Console\Question\Question;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Yaml\Yaml;
@@ -223,7 +222,7 @@ class CreatePhpServiceCommand extends AbstractCommand
             /* @var Server $server */
             foreach ($upStreams as $upStream) {
                 $builder->append(new Upstream(new Param($upStream), [
-                    new Directive('server', [new Param("$serviceName:9000")])
+                    new Directive('server', [new Param("$serviceName:9000")]),
                 ]));
             }
 
@@ -244,7 +243,6 @@ class CreatePhpServiceCommand extends AbstractCommand
                     new Directive('fastcgi_param', [new Param('SCRIPT_NAME ' . $scriptName)]),
                 ]));
             }
-
 
             $builder->dumpFile($gatewayFile);
         }

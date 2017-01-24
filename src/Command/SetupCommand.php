@@ -12,9 +12,9 @@ declare(strict_types=1);
 
 namespace Prooph\Micro\Command;
 
-use Madkom\NginxConfigurator\Config\Server;
 use Madkom\NginxConfigurator\Builder;
 use Madkom\NginxConfigurator\Config\Location;
+use Madkom\NginxConfigurator\Config\Server;
 use Madkom\NginxConfigurator\Node\Directive;
 use Madkom\NginxConfigurator\Node\Param;
 use Symfony\Component\Console\Command\LockableTrait;
@@ -142,7 +142,7 @@ class SetupCommand extends AbstractCommand
                 'nginx' => [
                     'image' => 'prooph/nginx:www',
                     'volumes' => [
-                        "./gateway:/etc/nginx/sites-enabled:ro",
+                        './gateway:/etc/nginx/sites-enabled:ro',
                     ],
                 ],
             ],
@@ -172,7 +172,7 @@ class SetupCommand extends AbstractCommand
         $server->append(new Directive('include', [new Param('conf.d/basic.conf')]));
         $server->append(new Directive('server_name', [new Param('localhost')]));
         $server->append(new Location(new Param('/'), null, [
-            new Directive('try_files', [new Param('\$uri \$uri/ 404')])
+            new Directive('try_files', [new Param('\$uri \$uri/ 404')]),
         ]));
 
         return $builder;
