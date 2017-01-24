@@ -177,6 +177,8 @@ class CreatePhpServiceCommand extends AbstractCommand
                         'Invalid command'
                     );
                 }
+
+                return $answer;
             });
             $question->setMaxAttempts(2);
 
@@ -265,7 +267,7 @@ class CreatePhpServiceCommand extends AbstractCommand
         if (isset($restart)) {
             $config['services'][$serviceName]['restart'] = 'always';
         }
-
+var_dump($command);
         if (isset($command)) {
             $config['services'][$serviceName]['command'] = $command;
         }
