@@ -12,15 +12,20 @@ declare(strict_types=1);
 
 namespace Prooph\Micro\Command;
 
-use Symfony\Component\Console\Command\Command;
+use Madkom\NginxConfigurator\Builder;
+use Madkom\NginxConfigurator\Config\Location;
+use Madkom\NginxConfigurator\Config\Server;
+use Madkom\NginxConfigurator\Node\Directive;
+use Madkom\NginxConfigurator\Node\Param;
 use Symfony\Component\Console\Command\LockableTrait;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Console\Question\ChoiceQuestion;
-use Symfony\Component\Console\Question\ConfirmationQuestion;
 use Symfony\Component\Console\Question\Question;
+use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Component\Yaml\Yaml;
 
-class SetupCommand extends Command
+class SetupCommand extends AbstractCommand
 {
     use LockableTrait;
 
@@ -29,257 +34,147 @@ class SetupCommand extends Command
         $this
             ->setName('micro:setup')
             ->setDescription('Setup a prooph-micro application')
-            ->setHelp('This command creates the skeleton for a prooph-micro(services) application.');
+            ->setHelp('This command creates the skeleton for a prooph-micro(services) application.')
+            ->addOption('no-ports', null, InputOption::VALUE_NONE, 'Do not publish ports on docker host.');
     }
 
-    protected function execute(InputInterface $input, OutputInterface $output)
+    protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $io = new SymfonyStyle($input, $output);
+
         if (! $this->lock()) {
-            $output->writeln('The command is already running in another process.');
+            $io->warning('The command is already running in another process. Aborted.');
 
-            return 0;
+            return 1;
         }
 
-        if (file_exists($this->getRootDir() . 'docker-compose.yml')) {
-            $output->writeln('docker-compose.yml exists already. Aborted.');
+        if (file_exists($this->getRootDir() . '/docker-compose.yml')) {
+            $io->warning('docker-compose.yml exists already. Aborted.');
 
-            return;
+            $this->release();
+
+            return 1;
         }
 
-        $output->writeln('This setup will use the following docker-images:');
-        $output->writeln('prooph/php:7.1-fpm');
-        $output->writeln('prooph/nginx:www (as webserver)');
-        $output->writeln('');
+        $io->section('This setup will use the following docker-images:');
+        $io->listing(['prooph/nginx:www (as webserver)']);
 
-        $helper = $this->getHelper('question');
+        $httpPort = null;
+        $httpsPort = null;
 
-        $question = new Question('Gateway directory (defaults to "gateway"): ', 'gateway');
-        $question->setValidator(function ($answer) {
-            if (! is_string($answer) || strlen($answer) === 0) {
-                throw new \RuntimeException(
-                    'Gateway directory cannot be empty'
-                );
-            }
-
-            return $answer;
-        });
-        $question->setMaxAttempts(2);
-
-        $gatewayDirectory = $helper->ask($input, $output, $question);
-
-        $question = new Question('Service directory (defaults to "service"): ', 'service');
-        $question->setValidator(function ($answer) {
-            if (! is_string($answer) || strlen($answer) === 0) {
-                throw new \RuntimeException(
-                    'Service directory cannot be empty'
-                );
-            }
-
-            return $answer;
-        });
-        $question->setMaxAttempts(2);
-
-        $serviceDirectory = $helper->ask($input, $output, $question);
-
-        $question = new Question('HTTP port (defaults to "80"): ', '80');
-        $question->setValidator(function ($answer) {
-            if (! is_int((int) $answer) || $answer === 0) {
-                throw new \RuntimeException(
-                    'Invalid HTTP port'
-                );
-            }
-
-            return $answer;
-        });
-        $question->setMaxAttempts(2);
-
-        $httpPort = $helper->ask($input, $output, $question);
-
-        $question = new Question('HTTPS port (defaults to "443"): ', '443');
-        $question->setValidator(function ($answer) {
-            if (! is_int((int) $answer) || $answer === 0) {
-                throw new \RuntimeException(
-                    'Invalid HTTPS port'
-                );
-            }
-
-            return $answer;
-        });
-        $question->setMaxAttempts(2);
-
-        $httpsPort = $helper->ask($input, $output, $question);
-
-        $question = new ChoiceQuestion('Choose an event-store database (defaults to PostgreSQL)', ['MySQL', 'PostgreSQL'], 1);
-
-        $database = $helper->ask($input, $output, $question);
-
-        if ('PostgreSQL' === $database) {
-            $question = new Question('PostgreSQL port (defaults to "5432"): ', '5432');
+        if (! $input->getOption('no-ports')) {
+            $question = new Question('HTTP port: ', 'random');
             $question->setValidator(function ($answer) {
-                if (! is_int((int) $answer) || $answer === 0) {
+                if ('random' === $answer) {
+                    return '';
+                }
+
+                if (! is_int((int) $answer) || 0 === (int) $answer) {
                     throw new \RuntimeException(
-                        'Invalid PostgreSQL port'
+                        'Invalid HTTP port'
                     );
                 }
 
                 return $answer;
             });
+
             $question->setMaxAttempts(2);
 
-            $dbPort = $helper->ask($input, $output, $question);
+            $httpPort = $io->askQuestion($question);
+            $configMessages[] = '<info>HTTP port:</info> '.($httpPort ?: 'random');
 
-            $mysqlRoot = null;
-        } else {
-            $question = new Question('MySQL port (defaults to "3306"): ', '3306');
+            $question = new Question('HTTPS port: ', 'random');
             $question->setValidator(function ($answer) {
-                if (! is_int((int) $answer) || $answer === 0) {
+                if ('random' === $answer) {
+                    return '';
+                }
+
+                if (! is_int((int) $answer) || 0 === (int) $answer) {
                     throw new \RuntimeException(
-                        'Invalid MySQL port'
+                        'Invalid HTTPS port'
                     );
                 }
 
                 return $answer;
             });
+
             $question->setMaxAttempts(2);
 
-            $dbPort = $helper->ask($input, $output, $question);
-
-            $question = new Question('MySQL root password (defaults to ""): ', '');
-
-            $mysqlRoot = $helper->ask($input, $output, $question);
+            $httpsPort = $io->askQuestion($question);
+            $configMessages[] = '<info>HTTPS port:</info> '.($httpsPort ?: 'random');
         }
 
-        $question = new Question('Database name: ', false);
-        $question->setValidator(function ($answer) {
-            if (! is_string($answer) || strlen($answer) === 0) {
-                throw new \RuntimeException(
-                    'Database name cannot be empty'
-                );
-            }
+        $io->section('Setup will be done with the following configuration:');
+        $io->listing($configMessages);
 
-            return $answer;
-        });
-        $question->setMaxAttempts(2);
+        if (! $io->confirm('Are those settings correct?', false)) {
+            $io->writeln('<comment>Aborted</comment>');
 
-        $dbName = $helper->ask($input, $output, $question);
+            $this->release();
 
-        $question = <<<EOT
-        
-###################################
-
-Setup will be done with the following configuration:
-
-Gateway directory: $gatewayDirectory
-Service directory: $serviceDirectory
-HTTP port: $httpPort
-HTTPS port: $httpsPort
-Event-Store-Database: $database
-Database name: $dbName
-
-EOT;
-        if ('PostgreSQL' === $database) {
-            $question .= "PostgreSQL port: $dbPort\n";
-        } else {
-            $question .= "MySQL port: $dbPort\nMySQL root password: $mysqlRoot\n";
-        }
-
-        $question .= "\nAre those settings correct? (y/n):";
-
-        $confirmation = new ConfirmationQuestion($question, false);
-
-        if (! $helper->ask($input, $output, $confirmation)) {
-            $output->writeln('Aborted');
-
-            return;
+            return 1;
         }
 
         file_put_contents(
-            $this->getRootDir() . 'docker-compose.yml',
+            $this->getRootDir() . '/docker-compose.yml',
             $this->generateConfigFile(
-                $gatewayDirectory,
-                $serviceDirectory,
                 $httpPort,
-                $httpsPort,
-                $database,
-                $dbPort,
-                $dbName,
-                $mysqlRoot
+                $httpsPort
             )
         );
 
-        $output->writeln('Successfully created microservice settings');
+        $this->generateNginxConfig()->dumpFile($this->getRootDir() . '/gateway/www.conf');
+
+        $io->success('Successfully created microservice settings');
 
         $this->release();
+
+        return 0;
     }
 
     private function generateConfigFile(
-        string $gatewayDirectory,
-        string $serviceDirectory,
-        string $httpPort,
-        string $httpsPort,
-        string $database,
-        string $dbPort,
-        string $dbName,
-        string $mysqlRoot = null
+        string $httpPort = null,
+        string $httpsPort = null
     ): string {
-        $config = <<<EOT
-# Generated prooph-micro docker-compose.yml file
-# Do not edit the first 4 comment lines, they are used by the micro-cli tool
-# gateway: $gatewayDirectory
-# service: $serviceDirectory
-version: '2'
+        $config = [
+            'version' => '2',
+            'services' => [
+                'nginx' => [
+                    'image' => 'prooph/nginx:www',
+                    'volumes' => [
+                        './gateway:/etc/nginx/sites-enabled:ro',
+                    ],
+                ],
+            ],
+        ];
 
-services:
-  nginx:
-    image: prooph/nginx:www
-    ports:
-      - $httpPort:80
-      - $httpsPort:443
-    volumes:
-      - ./$gatewayDirectory:/etc/nginx/sites-enabled:ro
-
-EOT;
-
-        if ('PostgreSQL' === $database) {
-            $config .= <<<EOT
-  postgres:
-    image: postgres:alpine
-    ports:
-      - $dbPort:5432
-    volumes:
-      - ./vendor/prooph/pdo-event-store/scripts/postgres:/docker-entrypoint-initdb.d
-    environment:
-      - POSTGRES_DB=$dbName
-EOT;
-        } else {
-            $config .= <<<EOT
-  mysql:
-    image: mysql
-    ports:
-     - $dbPort:3306
-    volumes:
-      - ./vendor/prooph/pdo-event-store/scripts/mysql:/docker-entrypoint-initdb.d
-    environment:
-      - MYSQL_ROOT_PASSWORD=$mysqlRoot
-      - MYSQL_DATABASE=$dbName
-EOT;
-
-            if (empty($mysqlRoot)) {
-                $config .= "\n      - MYSQL_ALLOW_EMPTY_PASSWORD=yes";
-            }
-
-            $config .= "\n";
+        if (null !== $httpPort) {
+            $config['services']['nginx']['ports'][] = '' !== $httpPort ? "$httpPort:80" : '80';
         }
 
-        return $config;
+        if (null !== $httpsPort) {
+            $config['services']['nginx']['ports'][] = '' !== $httpsPort ? "$httpsPort:443" : '443';
+        }
+
+        return Yaml::dump($config, 4);
     }
 
-    private function getRootDir(): string
+    private function generateNginxConfig(): Builder
     {
-        if (file_exists(__DIR__ . '/../../vendor/autoload.php')) {
-            return __DIR__ . '/../../';
-        } elseif (file_exists(__DIR__ . '/../../../../autoload.php')) {
-            return __DIR__ . '/../../../../../';
-        }
+        $builder = new Builder();
+
+        $server = $builder->append(new Server([new Directive('listen', [new Param('80')])]));
+
+        $server->append(new Directive('listen', [new Param('443 ssl http2')]));
+        $server->append(new Directive('server_name', [new Param('localhost')]));
+        $server->append(new Directive('root', [new Param('/var/www/public')]));
+        $server->append(new Directive('index', [new Param('index.php')]));
+        $server->append(new Directive('include', [new Param('conf.d/basic.conf')]));
+        $server->append(new Directive('server_name', [new Param('localhost')]));
+        $server->append(new Location(new Param('/'), null, [
+            new Directive('try_files', [new Param('\$uri \$uri/ 404')]),
+        ]));
+
+        return $builder;
     }
 }
