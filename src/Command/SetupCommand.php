@@ -12,8 +12,11 @@ declare(strict_types=1);
 
 namespace Prooph\Micro\Command;
 
-use RomanPitak\Nginx\Config\Directive;
-use RomanPitak\Nginx\Config\Scope;
+use Madkom\NginxConfigurator\Config\Server;
+use Madkom\NginxConfigurator\Builder;
+use Madkom\NginxConfigurator\Config\Location;
+use Madkom\NginxConfigurator\Node\Directive;
+use Madkom\NginxConfigurator\Node\Param;
 use Symfony\Component\Console\Command\LockableTrait;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -55,22 +58,6 @@ class SetupCommand extends AbstractCommand
 
         $io->section('This setup will use the following docker-images:');
         $io->listing(['prooph/nginx:www (as webserver)']);
-
-        $question = new Question('Gateway directory', 'gateway');
-        $question->setValidator(function ($answer) {
-            if (! is_string($answer) || strlen($answer) === 0) {
-                throw new \RuntimeException(
-                    'Gateway directory cannot be empty'
-                );
-            }
-
-            return $answer;
-        });
-
-        $question->setMaxAttempts(2);
-
-        $gatewayDirectory = $io->askQuestion($question);
-        $configMessages[] = "<info>Gateway directory:</info> $gatewayDirectory";
 
         $httpPort = null;
         $httpsPort = null;
@@ -131,17 +118,12 @@ class SetupCommand extends AbstractCommand
         file_put_contents(
             $this->getRootDir() . '/docker-compose.yml',
             $this->generateConfigFile(
-                $gatewayDirectory,
                 $httpPort,
                 $httpsPort
             )
         );
 
-        if (! is_dir($this->getRootDir() . '/' . $gatewayDirectory)) {
-            mkdir($this->getRootDir() . '/' . $gatewayDirectory, 0777, true);
-        }
-
-        $this->generateNginxConfig()->saveToFile($this->getRootDir() . '/' . $gatewayDirectory . '/www.conf');
+        $this->generateNginxConfig()->dumpFile($this->getRootDir() . '/gateway/www.conf');
 
         $io->success('Successfully created microservice settings');
 
@@ -151,7 +133,6 @@ class SetupCommand extends AbstractCommand
     }
 
     private function generateConfigFile(
-        string $gatewayDirectory,
         string $httpPort = null,
         string $httpsPort = null
     ): string {
@@ -161,10 +142,7 @@ class SetupCommand extends AbstractCommand
                 'nginx' => [
                     'image' => 'prooph/nginx:www',
                     'volumes' => [
-                        "./$gatewayDirectory:/etc/nginx/sites-enabled:ro",
-                    ],
-                    'labels' => [
-                        'prooph-gateway-directory' => "./$gatewayDirectory",
+                        "./gateway:/etc/nginx/sites-enabled:ro",
                     ],
                 ],
             ],
@@ -181,23 +159,22 @@ class SetupCommand extends AbstractCommand
         return Yaml::dump($config, 4);
     }
 
-    private function generateNginxConfig(): Scope
+    private function generateNginxConfig(): Builder
     {
-        $config = Scope::create()
-            ->addDirective(Directive::create('server')
-                ->setChildScope(Scope::create()
-                    ->addDirective(Directive::create('listen', '80'))
-                    ->addDirective(Directive::create('listen', '443 ssl http2'))
-                    ->addDirective(Directive::create('server_name', 'localhost'))
-                    ->addDirective(Directive::create('root', '/var/www/public'))
-                    ->addDirective(Directive::create('index', 'index.php'))
-                    ->addDirective(Directive::create('include', ' conf.d/basic.conf'))
-                    ->addDirective(Directive::create('location', '/', Scope::create()
-                        ->addDirective(Directive::create('try_files', '\$uri \$uri/ 404'))
-                    ))
-                )
-            );
+        $builder = new Builder();
 
-        return $config;
+        $server = $builder->append(new Server([new Directive('listen', [new Param('80')])]));
+
+        $server->append(new Directive('listen', [new Param('443 ssl http2')]));
+        $server->append(new Directive('server_name', [new Param('localhost')]));
+        $server->append(new Directive('root', [new Param('/var/www/public')]));
+        $server->append(new Directive('index', [new Param('index.php')]));
+        $server->append(new Directive('include', [new Param('conf.d/basic.conf')]));
+        $server->append(new Directive('server_name', [new Param('localhost')]));
+        $server->append(new Location(new Param('/'), null, [
+            new Directive('try_files', [new Param('\$uri \$uri/ 404')])
+        ]));
+
+        return $builder;
     }
 }

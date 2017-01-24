@@ -12,14 +12,21 @@ declare(strict_types=1);
 
 namespace Prooph\Micro\Command;
 
-use RomanPitak\Nginx\Config\Directive;
-use RomanPitak\Nginx\Config\Scope;
+use Madkom\NginxConfigurator\Config\Server;
+use Madkom\NginxConfigurator\Builder;
+use Madkom\NginxConfigurator\Config\Location;
+use Madkom\NginxConfigurator\Config\Upstream;
+use Madkom\NginxConfigurator\Node\Directive;
+use Madkom\NginxConfigurator\Node\Node;
+use Madkom\NginxConfigurator\Node\Param;
+use Madkom\NginxConfigurator\Parser;
 use Symfony\Component\Console\Command\LockableTrait;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Question\ChoiceQuestion;
 use Symfony\Component\Console\Question\ConfirmationQuestion;
 use Symfony\Component\Console\Question\Question;
+use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Yaml\Yaml;
 
 class CreatePhpServiceCommand extends AbstractCommand
@@ -36,21 +43,23 @@ class CreatePhpServiceCommand extends AbstractCommand
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        if (! $this->lock()) {
-            $output->writeln('The command is already running in another process.');
+        $io = new SymfonyStyle($input, $output);
 
-            return 0;
+        if (! $this->lock()) {
+            $io->warning('The command is already running in another process. Aborted.');
+
+            return 1;
         }
 
         if (! file_exists($this->getRootDir() . '/docker-compose.yml')) {
-            $output->writeln('docker-compose.yml does not exist. Run ./bin/micro micro:setup. Aborted.');
+            $io->warning('docker-compose.yml does not exist. Run ./bin/micro micro:setup. Aborted.');
 
-            return 0;
+            $this->release();
+
+            return 1;
         }
 
         $currentConfig = Yaml::parse(file_get_contents($this->getRootDir() . '/docker-compose.yml'));
-
-        $helper = $this->getHelper('question');
 
         $question = new Question('Name of the service: ');
         $question->setValidator(function ($answer) {
@@ -64,41 +73,23 @@ class CreatePhpServiceCommand extends AbstractCommand
         });
         $question->setMaxAttempts(2);
 
-        $serviceName = $helper->ask($input, $output, $question);
+        $serviceName = $io->askQuestion($question);
 
-        $question = new ChoiceQuestion('Which PHP version to use?', [
-            '7.1',
-            '7.0',
-            '5.6',
+        $question = new ChoiceQuestion('Which PHP image to use?', [
+            'prooph/php:7.1-cli',
+            'prooph/php:7.1-fpm',
+            'prooph/php:7.0-cli',
+            'prooph/php:7.0-fpm',
+            'prooph/php:5.6-cli',
+            'prooph/php:5.6-fpm',
         ]);
         $question->setMaxAttempts(2);
 
-        $version = $helper->ask($input, $output, $question);
+        $image = $io->askQuestion($question);
 
-        $images = [
-            'prooph/php:' . $version . '-cli',
-            'prooph/php:' . $version . '-cli-blackfire',
-            'prooph/php:' . $version . '-cli-opcache',
-            'prooph/php:' . $version . '-cli-xdebug',
-            'prooph/php:' . $version . '-fpm',
-        ];
-
-        if ('5.6' !== $version) {
-            $images[] = 'prooph/php:' . $version . '-fpm-blackfire';
-        }
-
-        $images[] = 'prooph/php:' . $version . '-fpm-opcache';
-        $images[] = 'prooph/php:' . $version . '-fpm-xdebug';
-        $images[] = 'prooph/php:' . $version . '-fpm-zray';
-
-        $question = new ChoiceQuestion('Which PHP image to use?', $images);
-        $question->setMaxAttempts(2);
-
-        $image = $helper->ask($input, $output, $question);
-
-        $question = new Question('Add a volume (f.e. "./service/' . $serviceName .':/var/www"): ');
+        $question = new Question('Give the directory in which to mount the service (defaults to: "/var/www")', '/var/www');
         $question->setValidator(function ($answer) {
-            if (! is_string($answer) || strlen($answer) === 0 || false === strpos($answer, ':', 1)) {
+            if (! is_string($answer) || strlen($answer) === 0) {
                 throw new \RuntimeException(
                     'Invalid service name'
                 );
@@ -108,35 +99,13 @@ class CreatePhpServiceCommand extends AbstractCommand
         });
         $question->setMaxAttempts(2);
 
-        $volumes[] = $helper->ask($input, $output, $question);
-
-        while (1) {
-            $question = new Question('Add a another volume (f.e. "./service/' . $serviceName .':/var/www"): ', null);
-            $question->setValidator(function ($answer) {
-                if (null !== $answer && (! is_string($answer) || false === strpos($answer, ':', 1))) {
-                    throw new \RuntimeException(
-                        'Invalid service name'
-                    );
-                }
-
-                return $answer;
-            });
-            $question->setMaxAttempts(2);
-
-            $volume = $helper->ask($input, $output, $question);
-
-            if (null === $volume) {
-                break;
-            }
-
-            $volumes[] = $volume;
-        }
+        $volume = $io->askQuestion($question);
 
         $services = array_merge(['[NONE]'], array_keys($currentConfig['services']));
-        $question = new ChoiceQuestion('On which services is the new service dependend? ', $services);
+        $question = new ChoiceQuestion('On which services is the new service dependend? (comma separated)', $services);
         $question->setMultiselect(true);
 
-        $dependsOn = $helper->ask($input, $output, $question);
+        $dependsOn = $io->askQuestion($question);
 
         if ($dependsOn === ['[NONE]']) {
             $dependsOn = [];
@@ -144,22 +113,10 @@ class CreatePhpServiceCommand extends AbstractCommand
 
         $useNginxConfig = false;
 
-        if (in_array('nginx', $dependsOn)) {
+        if ('-fpm' === substr($image, -4, 4)) {
             $useNginxConfig = true;
-            $labels = $currentConfig['services']['nginx']['labels'];
 
-            foreach ($labels as $key => $value) {
-                if ('prooph-gateway-directory' === $key) {
-                    $gatewayFile = $this->getRootDir() . '/' . $value . '/www.conf';
-                    break;
-                }
-            }
-
-            if (! isset($gatewayFile)) {
-                throw new \RuntimeException('No gateway directory found in nginx service config!');
-            }
-
-            $output->writeln('Nginx configuration');
+            $io->section('Nginx configuration');
             upstream:
             $question = new Question('Add upstream (f.e. "php-user-GET"): ');
             $question->setValidator(function ($answer) {
@@ -173,18 +130,16 @@ class CreatePhpServiceCommand extends AbstractCommand
             });
             $question->setMaxAttempts(2);
 
-            $upStreams[] = $helper->ask($input, $output, $question);
+            $upStreams[] = $io->askQuestion($question);
 
-            $question = new ConfirmationQuestion('Add more upstreams? (y/n) ', false);
-
-            if ($helper->ask($input, $output, $question)) {
+            if ($io->confirm('Add more upstreams?', false)) {
                 goto upstream;
             }
 
             nginxlocation:
-            $question = new Question('Add location (f.e. "location = /api/v1/user-$request_method"): ');
+            $question = new Question('Add location (f.e. "= /api/v1/user-$request_method"): ');
             $question->setValidator(function ($answer) {
-                if (! is_string($answer) || ! preg_match('/^location /', $answer)) {
+                if (! is_string($answer) || 0 === strlen($answer)) {
                     throw new \RuntimeException(
                         'Invalid location'
                     );
@@ -194,27 +149,25 @@ class CreatePhpServiceCommand extends AbstractCommand
             });
             $question->setMaxAttempts(2);
 
-            $locations[] = $helper->ask($input, $output, $question);
+            $locations[] = $io->askQuestion($question);
 
             $question = new ChoiceQuestion('Add fastcgi_pass: ', $upStreams);
 
-            $fastcgiPasses[] = $helper->ask($input, $output, $question);
+            $fastcgiPasses[] = $io->askQuestion($question);
 
             $question = new Question('Add fastcgi_index (defaults to "index.php"): ', 'index.php');
-            $fastcgiIndexes[] = $helper->ask($input, $output, $question);
+            $fastcgiIndexes[] = $io->askQuestion($question);
 
             $question = new Question('Add fastcgi_param SCRIPT_FILENAME (defaults to "\'/var/www/public/index.php\': "): ', '\'/var/www/public/index.php\'');
-            $scriptFileNames[] = $helper->ask($input, $output, $question);
+            $scriptFileNames[] = $io->askQuestion($question);
 
             $question = new Question('Add fastcgi_param PATH_INFO (defaults to "\'/\'"): ', '\'/\'');
-            $pathInfos[] = $helper->ask($input, $output, $question);
+            $pathInfos[] = $io->askQuestion($question);
 
             $question = new Question('Add fastcgi_param SCRIPT_NAME (defaults to "\'/index.php\'"): ', '\'/index.php\'');
-            $scriptNames[] = $helper->ask($input, $output, $question);
+            $scriptNames[] = $io->askQuestion($question);
 
-            $moreNginxConfig = new ConfirmationQuestion('Do you want to add another nginx location? (y/n): ', false);
-
-            if ($helper->ask($input, $output, $moreNginxConfig)) {
+            if ($io->confirm('Do you want to add another nginx location?', false)) {
                 goto nginxlocation;
             }
         } else {
@@ -228,38 +181,50 @@ class CreatePhpServiceCommand extends AbstractCommand
             });
             $question->setMaxAttempts(2);
 
-            $command = $helper->ask($input, $output, $question);
+            $command = $io->askQuestion($question);
 
-            $question = new ConfirmationQuestion('Always restart container if it exists? (y/n): ');
-            $restart = $helper->ask($input, $output, $question);
-        }
-
-        $volumesString = '';
-        foreach ($it = new \CachingIterator(new \ArrayIterator($volumes), \CachingIterator::FULL_CACHE) as $volume) {
-            $volumesString .= "  - $volume";
-            if ($it->hasNext()) {
-                $volumesString .= "\n";
-            }
+            $restart = $io->confirm('Always restart container if it exists?', false);
         }
 
         $dependsOnString = '';
         foreach ($it = new \CachingIterator(new \ArrayIterator($dependsOn), \CachingIterator::FULL_CACHE) as $dependend) {
-            $dependsOnString .= "  - $dependend\n";
+            $dependsOnString .= "  - $dependend";
             if ($it->hasNext()) {
-                $volumesString .= "\n";
+                $dependsOnString .= "\n";
             }
         }
 
         if ($useNginxConfig) {
-            $nginxConfig = Scope::fromFile($gatewayFile);
+            $gatewayFile = $this->getRootDir() . '/gateway/www.conf';
 
+            $parser = new Parser();
+
+            $nginxConfig = $parser->parseFile($gatewayFile);
+
+            $builder = new Builder();
+            $builder->append($nginxConfig);
+
+            $servers = $nginxConfig->search(function (Node $node) {
+                return $node instanceof Server;
+            });
+
+            $count = count($servers);
+
+            if ($count === 0) {
+                throw new \RuntimeException('No server section found in gateway config.');
+            }
+
+            if ($count > 1) {
+                throw new \RuntimeException('More than one server section found in gateway config.');
+            }
+
+            $server = $servers->getIterator()->current();
+
+            /* @var Server $server */
             foreach ($upStreams as $upStream) {
-                $nginxConfig
-                    ->addDirective(Directive::create('upstream', $upStream)
-                        ->setChildScope(Scope::create()
-                            ->addDirective(Directive::create('server', "$serviceName:9000;"))
-                        )
-                    );
+                $builder->append(new Upstream(new Param($upStream), [
+                    new Directive('server', [new Param("$serviceName:9000")])
+                ]));
             }
 
             while ($location = array_shift($locations)) {
@@ -269,32 +234,28 @@ class CreatePhpServiceCommand extends AbstractCommand
                 $pathInfo = array_shift($pathInfos);
                 $scriptName = array_shift($scriptNames);
 
-                $nginxConfig
-                    ->addDirective(Directive::create('server')
-                        ->setChildScope(Scope::create()
-                            ->addDirective(Directive::create($location)
-                                ->setChildScope(Scope::create()
-                                    ->addDirective(Directive::create('fastcgi_split_path_info', '^(.+\.php)(/.+)$'))
-                                    ->addDirective(Directive::create('fastcgi_pass', $fastcgiPass))
-                                    ->addDirective(Directive::create('fastcgi_index', $fastcgiIndex))
-                                    ->addDirective(Directive::create('include', 'fastcgi_params'))
-                                    ->addDirective(Directive::create('fastcgi_param', 'SCRIPT_FILENAME ' . $scriptFileName))
-                                    ->addDirective(Directive::create('fastcgi_param', 'PATH_INFO ' . $pathInfo))
-                                    ->addDirective(Directive::create('fastcgi_param', 'SCRIPT_NAME ' . $scriptName))
-                                )
-                            )
-                        )
-                    );
+                $server->append(new Location(new Param($location), null, [
+                    new Directive('fastcgi_split_path_info', [new Param('^(.+\.php)(/.+)$')]),
+                    new Directive('fastcgi_pass', [new Param($fastcgiPass)]),
+                    new Directive('fastcgi_index', [new Param($fastcgiIndex)]),
+                    new Directive('include', [new Param('fastcgi_params')]),
+                    new Directive('fastcgi_param', [new Param('SCRIPT_FILENAME ' . $scriptFileName)]),
+                    new Directive('fastcgi_param', [new Param('PATH_INFO ' . $pathInfo)]),
+                    new Directive('fastcgi_param', [new Param('SCRIPT_NAME ' . $scriptName)]),
+                ]));
             }
 
-            file_put_contents($gatewayFile, $nginxConfig->prettyPrint(-1));
+
+            $builder->dumpFile($gatewayFile);
         }
 
         $config = [
             'services' => [
                 $serviceName => [
                     'image' => $image,
-                    'volumes' => $volumes,
+                    'volumes' => [
+                        "./service/$serviceName:$volume",
+                    ],
                 ],
             ],
         ];
@@ -313,8 +274,10 @@ class CreatePhpServiceCommand extends AbstractCommand
 
         $this->updateConfig($serviceName, $config);
 
-        $output->writeln('Successfully updated microservice settings');
+        $io->success('Successfully updated microservice settings');
 
         $this->release();
+
+        return 0;
     }
 }

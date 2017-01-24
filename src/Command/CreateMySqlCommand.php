@@ -18,6 +18,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Question\ChoiceQuestion;
 use Symfony\Component\Console\Question\ConfirmationQuestion;
 use Symfony\Component\Console\Question\Question;
+use Symfony\Component\Console\Style\SymfonyStyle;
 
 class CreateMySqlCommand extends AbstractCommand
 {
@@ -33,19 +34,21 @@ class CreateMySqlCommand extends AbstractCommand
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        if (! $this->lock()) {
-            $output->writeln('The command is already running in another process.');
+        $io = new SymfonyStyle($input, $output);
 
-            return 0;
+        if (! $this->lock()) {
+            $io->warning('The command is already running in another process. Aborted.');
+
+            return 1;
         }
 
         if (! file_exists($this->getRootDir() . '/docker-compose.yml')) {
-            $output->writeln('docker-compose.yml does not exist. Run ./bin/micro micro:setup. Aborted.');
+            $io->warning('docker-compose.yml does not exist. Run ./bin/micro micro:setup. Aborted.');
 
-            return 0;
+            $this->release();
+
+            return 1;
         }
-
-        $helper = $this->getHelper('question');
 
         $question = new Question('Name of the service (f.e. mysql): ');
         $question->setValidator(function ($answer) {
@@ -59,7 +62,8 @@ class CreateMySqlCommand extends AbstractCommand
         });
         $question->setMaxAttempts(2);
 
-        $serviceName = $helper->ask($input, $output, $question);
+        $serviceName = $io->askQuestion($question);
+        $configMessages[] = '<info>Service name:</info> '.$serviceName;
 
         $question = new ChoiceQuestion('Which MySQL image to use?', [
             'mysql:5.7',
@@ -68,7 +72,8 @@ class CreateMySqlCommand extends AbstractCommand
         ]);
         $question->setMaxAttempts(2);
 
-        $image = $helper->ask($input, $output, $question);
+        $image = $io->askQuestion($question);
+        $configMessages[] = '<info>MySQL image:</info> '.$image;
 
         $question = new Question('Database name: ', false);
         $question->setValidator(function ($answer) {
@@ -82,11 +87,16 @@ class CreateMySqlCommand extends AbstractCommand
         });
         $question->setMaxAttempts(2);
 
-        $dbName = $helper->ask($input, $output, $question);
+        $dbName = $io->askQuestion($question);
+        $configMessages[] = '<info>Database name:</info> '.$dbName;
 
-        $question = new Question('MySQL host port (guest is 3306, defaults to random): ', 'random');
+        $question = new Question('MySQL port: ', 'random');
         $question->setValidator(function ($answer) {
-            if (! is_numeric($answer) && 'random' !== $answer) {
+            if ('random' === $answer) {
+                return '';
+            }
+
+            if (! is_int((int) $answer) || 0 === (int) $answer) {
                 throw new \RuntimeException(
                     'Invalid MySQL port'
                 );
@@ -96,15 +106,25 @@ class CreateMySqlCommand extends AbstractCommand
         });
         $question->setMaxAttempts(2);
 
-        $dbPort = $helper->ask($input, $output, $question);
+        $dbPort = $io->askQuestion($question);
+        $configMessages[] = '<info>Database port:</info> '.($dbPort ?: 'random');
 
-        $question = new Question('MySQL root password (defaults to ""): ', '');
+        $question = new Question('MySQL root password: ', '');
+        $question->setValidator(function ($answer) {
+            if (! is_string($answer)) {
+                throw new \RuntimeException(
+                    'Invalid password'
+                );
+            }
 
-        $mysqlRoot = $helper->ask($input, $output, $question);
+            return $answer;
+        });
+        $question->setMaxAttempts(2);
 
-        $question = new ConfirmationQuestion('Do you want to create antoher MySQL user? (y/n) ', false);
+        $mysqlRoot = $io->askQuestion($question);
+        $configMessages[] = '<info>MySQL root password:</info> ' . $mysqlRoot;
 
-        $answer = $helper->ask($input, $output, $question);
+        $answer = $io->confirm('Do you want to create antoher MySQL user?', false);
 
         if ($answer) {
             $question = new Question('MySQL user: ', '');
@@ -119,7 +139,8 @@ class CreateMySqlCommand extends AbstractCommand
             });
             $question->setMaxAttempts(2);
 
-            $userName = $helper->ask($input, $output, $question);
+            $userName = $io->askQuestion($question);
+            $configMessages[] = '<info>MySQL user:</info> ' . $userName;
 
             $question = new Question('MySQL password: ', '');
             $question->setValidator(function ($answer) {
@@ -133,42 +154,27 @@ class CreateMySqlCommand extends AbstractCommand
             });
             $question->setMaxAttempts(2);
 
-            $password = $helper->ask($input, $output, $question);
+            $password = $io->askQuestion($question);
+            $configMessages[] = '<info>MySQL password:</info> '.$password;
         }
 
         $question = new Question('Mount docker-entrypoint-initdb.d (optional): ', null);
+        $question->setValidator(function ($answer) {
+            return $answer;
+        });
 
-        $initDb = $helper->ask($input, $output, $question);
+        $initDb = $io->askQuestion($question);
+        $configMessages[] = '<info>docker-entrypoint-initdb.d:</info> '.$initDb;
 
-        $question = <<<EOT
-        
-####################################################
+        $io->section('Setup will be done with the following configuration:');
+        $io->listing($configMessages);
 
-Setup will be done with the following configuration:
+        if (! $io->confirm('Are those settings correct?', false)) {
+            $io->writeln('<comment>Aborted</comment>');
 
-Service name: $serviceName
-Image: $image
-Port: $dbPort
-Database name: $dbName
-Root password: $mysqlRoot
+            $this->release();
 
-EOT;
-        if ($initDb) {
-            $question .= "docker-entrypoint-initdb.d: $initDb\n";
-        }
-
-        if ($answer) {
-            $question .= "User name: $userName\nPassword: $password\n";
-        }
-
-        $question .= "\nAre those settings correct? (y/n): ";
-
-        $confirmation = new ConfirmationQuestion($question, false);
-
-        if (! $helper->ask($input, $output, $confirmation)) {
-            $output->writeln('Aborted');
-
-            return 0;
+            return 1;
         }
 
         $config = [
@@ -213,8 +219,10 @@ EOT;
 
         $this->updateConfig($serviceName, $config);
 
-        $output->writeln('Successfully updated microservice settings');
+        $io->success('Successfully updated microservice settings');
 
         $this->release();
+
+        return 0;
     }
 }

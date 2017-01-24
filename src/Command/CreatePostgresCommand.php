@@ -18,6 +18,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Question\ChoiceQuestion;
 use Symfony\Component\Console\Question\ConfirmationQuestion;
 use Symfony\Component\Console\Question\Question;
+use Symfony\Component\Console\Style\SymfonyStyle;
 
 class CreatePostgresCommand extends AbstractCommand
 {
@@ -33,19 +34,21 @@ class CreatePostgresCommand extends AbstractCommand
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        if (! $this->lock()) {
-            $output->writeln('The command is already running in another process.');
+        $io = new SymfonyStyle($input, $output);
 
-            return 0;
+        if (! $this->lock()) {
+            $io->warning('The command is already running in another process. Aborted.');
+
+            return 1;
         }
 
         if (! file_exists($this->getRootDir() . '/docker-compose.yml')) {
-            $output->writeln('docker-compose.yml does not exist. Run ./bin/micro micro:setup. Aborted.');
+            $io->warning('docker-compose.yml does not exist. Run ./bin/micro micro:setup. Aborted.');
 
-            return 0;
+            $this->release();
+
+            return 1;
         }
-
-        $helper = $this->getHelper('question');
 
         $question = new Question('Name of the service (f.e. postgres): ');
         $question->setValidator(function ($answer) {
@@ -59,7 +62,8 @@ class CreatePostgresCommand extends AbstractCommand
         });
         $question->setMaxAttempts(2);
 
-        $serviceName = $helper->ask($input, $output, $question);
+        $serviceName = $io->askQuestion($question);
+        $configMessages[] = '<info>Service name:</info> '.$serviceName;
 
         $question = new ChoiceQuestion('Which PostgreSQL image to use?', [
             'postgres:9.6-alpine',
@@ -75,7 +79,8 @@ class CreatePostgresCommand extends AbstractCommand
         ]);
         $question->setMaxAttempts(2);
 
-        $image = $helper->ask($input, $output, $question);
+        $image = $io->askQuestion($question);
+        $configMessages[] = '<info>PostgreSQL image:</info> '.$image;
 
         $question = new Question('Database name: ', false);
         $question->setValidator(function ($answer) {
@@ -89,13 +94,18 @@ class CreatePostgresCommand extends AbstractCommand
         });
         $question->setMaxAttempts(2);
 
-        $dbName = $helper->ask($input, $output, $question);
+        $dbName = $io->askQuestion($question);
+        $configMessages[] = '<info>Database name:</info> '.$dbName;
 
-        $question = new Question('Postgres port (guest is 5432, defaults to random): ', 'random');
+        $question = new Question('PostgreSQL port: ', 'random');
         $question->setValidator(function ($answer) {
-            if (! is_numeric($answer) && 'random' !== $answer) {
+            if ('random' === $answer) {
+                return '';
+            }
+
+            if (! is_int((int) $answer) || 0 === (int) $answer) {
                 throw new \RuntimeException(
-                    'Invalid MySQL port'
+                    'Invalid PostgreSQL port'
                 );
             }
 
@@ -103,13 +113,15 @@ class CreatePostgresCommand extends AbstractCommand
         });
         $question->setMaxAttempts(2);
 
-        $dbPort = $helper->ask($input, $output, $question);
+        $dbPort = $io->askQuestion($question);
+        $configMessages[] = '<info>Database port:</info> '.($dbPort ?: 'random');
 
-        $question = new Question('Postgres user (defaults to: "postgres"): ', 'postgres');
+        $question = new Question('PostgreSQL user: ', 'postgres');
 
-        $userName = $helper->ask($input, $output, $question);
+        $userName = $io->askQuestion($question);
+        $configMessages[] = '<info>User:</info> '.$userName;
 
-        $question = new Question('Postgres password (defaults to ""): ', '');
+        $question = new Question('PostgreSQL password: ', '');
         $question->setValidator(function ($answer) {
             if (! is_string($answer)) {
                 throw new \RuntimeException(
@@ -121,38 +133,34 @@ class CreatePostgresCommand extends AbstractCommand
         });
         $question->setMaxAttempts(2);
 
-        $password = $helper->ask($input, $output, $question);
+        $password = $io->askQuestion($question);
+        $configMessages[] = '<info>Password:</info> '.$password;
 
-        $question = new Question('Mount docker-entrypoint-initdb.d (optional):', null);
+        $question = new Question('Mount docker-entrypoint-initdb.d: ', '');
+        $question->setValidator(function ($answer) {
+            if (! is_string($answer)) {
+                throw new \RuntimeException(
+                    'Invalid docker-entrypoint-initdb.d'
+                );
+            }
 
-        $initDb = $helper->ask($input, $output, $question);
+            return $answer;
+        });
+        $question->setMaxAttempts(2);
 
-        $question = <<<EOT
-        
-####################################################
+        $initDb = $io->askQuestion($question);
 
-Setup will be done with the following configuration:
+        $configMessages[] = '<info>docker-entrypoint-initdb.d:</info> '.$initDb;
 
-Service name: $serviceName
-Image: $image
-Port: $dbPort
-Database name: $dbName
-User name: $userName
-Password: $password
+        $io->section('Setup will be done with the following configuration:');
+        $io->listing($configMessages);
 
-EOT;
-        if ($initDb) {
-            $question .= "docker-entrypoint-initdb.d: $initDb\n";
-        }
+        if (! $io->confirm('Are those settings correct?', false)) {
+            $io->writeln('<comment>Aborted</comment>');
 
-        $question .= "\nAre those settings correct? (y/n):";
+            $this->release();
 
-        $confirmation = new ConfirmationQuestion($question, false);
-
-        if (! $helper->ask($input, $output, $confirmation)) {
-            $output->writeln('Aborted');
-
-            return 0;
+            return 1;
         }
 
         $config = [
@@ -189,8 +197,10 @@ EOT;
 
         $this->updateConfig($serviceName, $config);
 
-        $output->writeln('Successfully updated microservice settings');
+        $io->success('Successfully updated microservice settings');
 
         $this->release();
+
+        return 0;
     }
 }
