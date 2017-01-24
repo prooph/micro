@@ -177,6 +177,8 @@ class CreatePhpServiceCommand extends AbstractCommand
                         'Invalid command'
                     );
                 }
+
+                return $answer;
             });
             $question->setMaxAttempts(2);
 
