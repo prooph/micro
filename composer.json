@@ -49,7 +49,6 @@
             "Prooph\\Micro\\": "src/"
         },
         "files": [
-            "src/AmqpPublisher.php",
             "src/Kernel.php"
         ]
     },
