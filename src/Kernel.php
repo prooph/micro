@@ -110,7 +110,7 @@ function buildCommandDispatcher(
             return persistEvents($aggregateResult, $eventStoreFactory, $definition, $definition->extractAggregateId($message));
         };
 
-        return pipleline(
+        return pipeline(
             $getDefinition,
             $loadState,
             $reconstituteState,
@@ -122,7 +122,7 @@ function buildCommandDispatcher(
 
 const pipeline = 'Prooph\Micro\Kernel\pipeline';
 
-function pipleline(callable $firstCallback, callable ...$callbacks): callable
+function pipeline(callable $firstCallback, callable ...$callbacks): callable
 {
     array_unshift($callbacks, $firstCallback);
 
