@@ -367,7 +367,7 @@ class KernelTest extends TestCase
      */
     public function it_pipes(): void
     {
-        $result = f\pipleline('strtolower', 'ucfirst')('aBC');
+        $result = f\pipeline('strtolower', 'ucfirst')('aBC');
 
         $this->assertEquals('Abc', $result);
     }
@@ -377,7 +377,7 @@ class KernelTest extends TestCase
      */
     public function it_handles_exceptions(): void
     {
-        $result = f\pipleline(function () {
+        $result = f\pipeline(function () {
             throw new \Exception('Exception there!');
         }, 'ucfirst')('aBC');
 
