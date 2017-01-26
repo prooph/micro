@@ -20,8 +20,8 @@ use Symfony\Component\Process\ProcessBuilder;
 
 final class ComposerInstallCommand extends AbstractCommand
 {
-    const DEFAULT_TIMEOUT = 0;
-    const DEFAULT_IDLE_TIMEOUT = 30;
+    private const DEFAULT_TIMEOUT = 0;
+    private const DEFAULT_IDLE_TIMEOUT = 30;
 
     protected function configure()
     {
@@ -50,46 +50,69 @@ final class ComposerInstallCommand extends AbstractCommand
         $timeout = (int) $input->getOption('timeout');
         $idleTimeout = (int) $input->getOption('idle-timeout');
 
-        $dockerComposeConfig = $this->getDockerComposeConfig();
-        $phpServices = [];
+        $phpServices = $this->getDeclaredPhpServices();
+        $serviceDirPath = $this->getRootDir() . '/' . self::SERVICE_DIR_PATH;
 
-        foreach ($dockerComposeConfig['services'] as $service => $serviceConfig) {
-            if (isset($serviceConfig['image']) && preg_match('/^prooph\/php:([0-9\.]+)/', $serviceConfig['image'],
-                    $matches)
-            ) {
-                $phpServices[$service] = $matches[1];
-            }
-        }
-
-        $servicePath = $this->getRootDir() . '/service';
+        $processBuilder = new ProcessBuilder();
+        $processBuilder->setPrefix('/usr/local/bin/docker run --rm -i -e COMPOSER_ALLOW_SUPERUSER=1');
+        $processBuilder->setTimeout($timeout);
 
         /** @var ProcessHelper $processHelper */
         $processHelper = $this->getHelper('process');
 
-        foreach ($phpServices as $service => $phpVersion) {
-            $process = ProcessBuilder::create([
-                '/usr/local/bin/docker',
-                'run',
-                '--rm',
-                '-i',
+        foreach ($phpServices as $service => $values) {
+
+            $processBuilder->setArguments([
                 '--volume',
-                "$servicePath/$service:/app",
-                '-e',
-                'COMPOSER_ALLOW_SUPERUSER=1',
-                "prooph/composer:$phpVersion",
+                sprintf('%s/%s:%s', $serviceDirPath, $service, $values['working_dir']),
+                'prooph/composer:'. $values['php_version'],
                 'install',
                 '--no-interaction',
                 '--no-suggest',
                 '--optimize-autoloader',
-            ])
-                ->getProcess();
+            ]);
 
-            $process->setTimeout($timeout);
+            $process = $processBuilder->getProcess();
             $process->setIdleTimeout($idleTimeout);
 
             $processHelper->run($output, $process);
         }
 
         return 0;
+    }
+
+    private function getDeclaredPhpServices(): array
+    {
+        $phpServices = [];
+        $dockerComposeConfig = $this->getDockerComposeConfig();
+
+        foreach ($dockerComposeConfig['services'] as $service => $serviceConfig) {
+            if (!isset($serviceConfig['image'], $serviceConfig['volumes']) || !is_array($serviceConfig['volumes'])) {
+                // not all neccessary service parameters are available. Service skipped
+                continue;
+            }
+
+            if (!preg_match('/^prooph\/php:([0-9\.]+)/', $serviceConfig['image'], $phpVersionMatches)) {
+                continue;
+            }
+
+            $workingDirRegexp = sprintf('/%s:([^:])/', self::SERVICE_DIR_PATH . '/' . $service);
+            foreach ($serviceConfig['volumes'] as $volume) {
+                if (preg_match($workingDirRegexp, $serviceConfig['image'], $workingDirMatches)) {
+                    break;
+                }
+            }
+
+            if (!isset($workingDirMatches)) {
+                continue;
+            }
+
+            $phpServices[$service] = [
+                'php_version' => $phpVersionMatches[1],
+                'working_dir' => $workingDirMatches[1],
+            ];
+        }
+
+        return $phpServices;
     }
 }
