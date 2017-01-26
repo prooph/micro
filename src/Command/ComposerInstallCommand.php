@@ -8,26 +8,48 @@
  * file that was distributed with this source code.
  */
 
-declare(strict_types=1);
+declare(strict_types = 1);
 
 namespace Prooph\Micro\Command;
 
 use Symfony\Component\Console\Helper\ProcessHelper;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Process\ProcessBuilder;
 
 final class ComposerInstallCommand extends AbstractCommand
 {
+    const DEFAULT_TIMEOUT = 0;
+    const DEFAULT_IDLE_TIMEOUT = 30;
+
     protected function configure()
     {
         $this
             ->setName('micro:composer:install')
-            ->setDescription('Install composer dependencies for services');
+            ->setDescription('Install composer dependencies for services')
+            ->addOption(
+                'timeout',
+                '-t',
+                InputOption::VALUE_REQUIRED,
+                'Sets the process timeout (max. runtime) per service in seconds',
+                self::DEFAULT_TIMEOUT
+            )
+            ->addOption(
+                'idle-timeout',
+                '-i',
+                InputOption::VALUE_REQUIRED,
+                'Sets the process idle timeout (max. time since last output) per service in seconds',
+                self::DEFAULT_IDLE_TIMEOUT
+            )
+        ;
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $timeout = (int) $input->getOption('timeout');
+        $idleTimeout = (int) $input->getOption('idle-timeout');
+
         $dockerComposeConfig = $this->getDockerComposeConfig();
         $phpServices = [];
 
@@ -62,8 +84,8 @@ final class ComposerInstallCommand extends AbstractCommand
             ])
                 ->getProcess();
 
-            $process->setTimeout(0);
-            $process->setIdleTimeout(30);
+            $process->setTimeout($timeout);
+            $process->setIdleTimeout($idleTimeout);
 
             $processHelper->run($output, $process);
         }
