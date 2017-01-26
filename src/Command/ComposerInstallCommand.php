@@ -8,14 +8,17 @@
  * file that was distributed with this source code.
  */
 
-declare(strict_types = 1);
+declare(strict_types=1);
 
 namespace Prooph\Micro\Command;
 
 use Symfony\Component\Console\Helper\ProcessHelper;
+use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Style\OutputStyle;
+use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Process\ProcessBuilder;
 
 final class ComposerInstallCommand extends AbstractCommand
@@ -28,6 +31,8 @@ final class ComposerInstallCommand extends AbstractCommand
         $this
             ->setName('micro:composer:install')
             ->setDescription('Install composer dependencies for services')
+            ->addArgument('service', InputArgument::OPTIONAL)
+            ->addOption('all', '-a', InputOption::VALUE_NONE)
             ->addOption(
                 'timeout',
                 '-t',
@@ -41,41 +46,59 @@ final class ComposerInstallCommand extends AbstractCommand
                 InputOption::VALUE_REQUIRED,
                 'Sets the process idle timeout (max. time since last output) per service in seconds',
                 self::DEFAULT_IDLE_TIMEOUT
-            )
-        ;
+            );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $io = new SymfonyStyle($input, $output);
+
+        $declaredPhpServices = $this->getDeclaredPhpServices();
+
+        if (! $declaredPhpServices) {
+            $io->warning('No php services declared in docker-compose.yml. Aborting');
+
+            return 1;
+        }
+
+        $requestedServices = $this->getRequestedServices($input, $io, $declaredPhpServices);
+
         $timeout = (int) $input->getOption('timeout');
         $idleTimeout = (int) $input->getOption('idle-timeout');
 
-        $phpServices = $this->getDeclaredPhpServices();
-        $serviceDirPath = $this->getRootDir() . '/' . self::SERVICE_DIR_PATH;
-
         $processBuilder = new ProcessBuilder();
-        $processBuilder->setPrefix('/usr/local/bin/docker run --rm -i -e COMPOSER_ALLOW_SUPERUSER=1');
+        $processBuilder->setPrefix($this->getDockerComposeExecutable());
         $processBuilder->setTimeout($timeout);
 
         /** @var ProcessHelper $processHelper */
         $processHelper = $this->getHelper('process');
 
-        foreach ($phpServices as $service => $values) {
+        $serviceDirPath = $this->getRootDir() . '/' . self::SERVICE_DIR_PATH;
+
+        foreach ($requestedServices as $service => $values) {
+            $io->newLine(2);
+            $io->section("Run `docker-compose install` for service $service");
 
             $processBuilder->setArguments([
+                'run',
+                '--rm',
+                '-i',
+                '-e',
+                'COMPOSER_ALLOW_SUPERUSER=1',
                 '--volume',
-                sprintf('%s/%s:%s', $serviceDirPath, $service, $values['working_dir']),
+                sprintf('%s/%s:/app:rw', $serviceDirPath, $service),
                 'prooph/composer:'. $values['php_version'],
                 'install',
                 '--no-interaction',
                 '--no-suggest',
-                '--optimize-autoloader',
             ]);
 
             $process = $processBuilder->getProcess();
             $process->setIdleTimeout($idleTimeout);
 
-            $processHelper->run($output, $process);
+            $processHelper->mustRun($output, $process, null, function ($type, $buffer) use ($io) {
+                $io->write("$buffer");
+            });
         }
 
         return 0;
@@ -87,32 +110,48 @@ final class ComposerInstallCommand extends AbstractCommand
         $dockerComposeConfig = $this->getDockerComposeConfig();
 
         foreach ($dockerComposeConfig['services'] as $service => $serviceConfig) {
-            if (!isset($serviceConfig['image'], $serviceConfig['volumes']) || !is_array($serviceConfig['volumes'])) {
-                // not all neccessary service parameters are available. Service skipped
+            if (! isset($serviceConfig['image'])) {
                 continue;
             }
 
-            if (!preg_match('/^prooph\/php:([0-9\.]+)/', $serviceConfig['image'], $phpVersionMatches)) {
-                continue;
-            }
-
-            $workingDirRegexp = sprintf('/%s:([^:])/', self::SERVICE_DIR_PATH . '/' . $service);
-            foreach ($serviceConfig['volumes'] as $volume) {
-                if (preg_match($workingDirRegexp, $serviceConfig['image'], $workingDirMatches)) {
-                    break;
-                }
-            }
-
-            if (!isset($workingDirMatches)) {
+            if (! preg_match('/^prooph\/php:([0-9\.]+)/', $serviceConfig['image'], $phpVersionMatches)) {
                 continue;
             }
 
             $phpServices[$service] = [
                 'php_version' => $phpVersionMatches[1],
-                'working_dir' => $workingDirMatches[1],
             ];
         }
 
         return $phpServices;
+    }
+
+    private function getRequestedServices(InputInterface $input, OutputStyle $io, array $requestedServices): array
+    {
+        if ($input->getOption('all')) {
+            return $requestedServices;
+        }
+
+        $requestedService = $input->getArgument('service');
+
+        if ($requestedService && ! array_key_exists($requestedService, $requestedServices)) {
+            $io->warning("Service with name '$requestedService' is not configured in docker-compose.yml yet.");
+            $requestedService = null;
+        }
+
+        if (! $requestedService) {
+            $requestedService = $io->choice('Select a service', array_keys($requestedServices));
+        }
+
+        if (! array_key_exists($requestedService, $requestedServices)) {
+            throw new \RuntimeException('Invalid service name provided.');
+        }
+
+        return [$requestedService => $requestedServices[$requestedService]];
+    }
+
+    private function getDockerComposeExecutable(): string
+    {
+        return '/usr/local/bin/docker';
     }
 }
