@@ -19,6 +19,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\OutputStyle;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\ProcessBuilder;
 
 final class ComposerInstallCommand extends AbstractCommand
@@ -46,7 +47,14 @@ final class ComposerInstallCommand extends AbstractCommand
                 InputOption::VALUE_REQUIRED,
                 'Sets the process idle timeout (max. time since last output) per service in seconds',
                 self::DEFAULT_IDLE_TIMEOUT
-            );
+            )
+            ->addOption(
+                'docker-executable',
+                null,
+                InputOption::VALUE_REQUIRED,
+                'Sets the path to docker executable'
+            )
+        ;
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -65,9 +73,10 @@ final class ComposerInstallCommand extends AbstractCommand
 
         $timeout = (int) $input->getOption('timeout');
         $idleTimeout = (int) $input->getOption('idle-timeout');
+        $dockerExecutable = $this->getDockerComposeExecutable($input);
 
         $processBuilder = new ProcessBuilder();
-        $processBuilder->setPrefix($this->getDockerComposeExecutable());
+        $processBuilder->setPrefix($dockerExecutable);
         $processBuilder->setTimeout($timeout);
 
         /** @var ProcessHelper $processHelper */
@@ -150,8 +159,28 @@ final class ComposerInstallCommand extends AbstractCommand
         return [$requestedService => $requestedServices[$requestedService]];
     }
 
-    private function getDockerComposeExecutable(): string
+    private function getDockerComposeExecutable(InputInterface $input): string
     {
-        return '/usr/local/bin/docker';
+        static $executableFinder = null;
+
+        $dockerExecutable = $input->getOption('docker-executable');
+
+        if (null !== $dockerExecutable) {
+            return $dockerExecutable;
+        }
+
+        if (null === $executableFinder) {
+            $executableFinder = new ExecutableFinder();
+        }
+
+        $dockerComposePath = $executableFinder->find('docker', null);
+
+        if (null === $dockerComposePath) {
+            throw new \RuntimeException(
+                'Could not detect docker executable. Please provide it with --docker-executable option.'
+            );
+        }
+
+        return $dockerComposePath;
     }
 }
