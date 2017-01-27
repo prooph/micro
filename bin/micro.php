@@ -30,4 +30,5 @@ $application->add(new Command\CreateMySqlCommand());
 $application->add(new Command\CreatePostgresCommand());
 $application->add(new Command\CreatePhpServiceCommand());
 $application->add(new Command\ComposerInstallCommand());
+$application->add(new Command\ComposerUpdateCommand());
 $application->run();

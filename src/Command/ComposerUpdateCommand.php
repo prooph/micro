@@ -2,18 +2,18 @@
 
 namespace Prooph\Micro\Command;
 
-final class ComposerInstallCommand extends AbstractComposerCommand
+final class ComposerUpdateCommand extends AbstractComposerCommand
 {
     protected function getComposerCommand(): string
     {
-        return 'install';
+        return 'update';
     }
 
     protected function configure()
     {
         $this
-            ->setName('micro:composer:install')
-            ->setDescription('Installs composer dependencies for services')
+            ->setName('micro:composer:update')
+            ->setDescription('Updates composer dependencies for services')
         ;
 
         parent::configure();
