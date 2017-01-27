@@ -53,8 +53,7 @@ abstract class AbstractComposerCommand extends AbstractCommand
                 null,
                 InputOption::VALUE_REQUIRED,
                 'Sets the path to docker executable'
-            )
-        ;
+            );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int

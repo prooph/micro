@@ -1,4 +1,6 @@
-<?php declare(strict_types = 1);
+<?php
+
+declare(strict_types=1);
 
 namespace Prooph\Micro\Command;
 
@@ -13,8 +15,7 @@ final class ComposerInstallCommand extends AbstractComposerCommand
     {
         $this
             ->setName('micro:composer:install')
-            ->setDescription('Installs composer dependencies for services')
-        ;
+            ->setDescription('Installs composer dependencies for services');
 
         parent::configure();
     }

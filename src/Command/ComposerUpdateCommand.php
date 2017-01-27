@@ -1,4 +1,6 @@
-<?php declare(strict_types = 1);
+<?php
+
+declare(strict_types=1);
 
 namespace Prooph\Micro\Command;
 
@@ -13,8 +15,7 @@ final class ComposerUpdateCommand extends AbstractComposerCommand
     {
         $this
             ->setName('micro:composer:update')
-            ->setDescription('Updates composer dependencies for services')
-        ;
+            ->setDescription('Updates composer dependencies for services');
 
         parent::configure();
     }
