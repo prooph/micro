@@ -82,8 +82,6 @@ final class ComposerInstallCommand extends AbstractCommand
         /** @var ProcessHelper $processHelper */
         $processHelper = $this->getHelper('process');
 
-        $serviceDirPath = $this->getRootDir() . '/' . self::SERVICE_DIR_PATH;
-
         foreach ($requestedServices as $service => $values) {
             $io->newLine(2);
             $io->section("Run `docker-compose install` for service $service");
@@ -95,7 +93,7 @@ final class ComposerInstallCommand extends AbstractCommand
                 '-e',
                 'COMPOSER_ALLOW_SUPERUSER=1',
                 '--volume',
-                sprintf('%s/%s:/app:rw', $serviceDirPath, $service),
+                $this->getServiceDirPath($service) . ':/app:rw',
                 'prooph/composer:'. $values['php_version'],
                 'install',
                 '--no-interaction',
@@ -124,6 +122,10 @@ final class ComposerInstallCommand extends AbstractCommand
             }
 
             if (! preg_match('/^prooph\/php:([0-9\.]+)/', $serviceConfig['image'], $phpVersionMatches)) {
+                continue;
+            }
+
+            if (! file_exists($this->getServiceDirPath($service) . '/composer.json')) {
                 continue;
             }
 

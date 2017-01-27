@@ -17,11 +17,6 @@ use Symfony\Component\Yaml\Yaml;
 
 abstract class AbstractCommand extends Command
 {
-    /*
-     * Defines the relative directory path where services are stored.
-     */
-    protected const SERVICE_DIR_PATH = './service';
-
     protected function getRootDir(): string
     {
         if (file_exists(__DIR__ . '/../../vendor/autoload.php')) {
@@ -29,6 +24,11 @@ abstract class AbstractCommand extends Command
         } elseif (file_exists(__DIR__ . '/../../../../autoload.php')) {
             return realpath(__DIR__ . '/../../../../../');
         }
+    }
+
+    protected function getServiceDirPath($serviceName): string
+    {
+        return $this->getRootDir() . '/service/' . $serviceName;
     }
 
     protected function getDockerComposeConfig(): array
