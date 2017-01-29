@@ -166,7 +166,7 @@ function loadEvents(
     }
 
     if ($eventStore->hasStream($streamName)) {
-        return $eventStore->load($streamName, 1, null, $metadataMatcher)->streamEvents();
+        return $eventStore->load($streamName, 1, null, $metadataMatcher);
     }
 
     return new ArrayIterator();
