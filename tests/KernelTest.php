@@ -49,7 +49,7 @@ class KernelTest extends TestCase
             if (null === $eventStore) {
                 $eventStore = $this->prophesize(EventStore::class);
                 $eventStore->hasStream('foo')->willReturn(true)->shouldBeCalled();
-                $eventStore->load(Argument::type(StreamName::class), 1, null, null)->willReturn(new Stream(new StreamName('foo'), new \ArrayIterator()))->shouldBeCalled();
+                $eventStore->load(Argument::type(StreamName::class), 1, null, null)->willReturn(new \ArrayIterator())->shouldBeCalled();
                 $eventStore->appendTo(Argument::type(StreamName::class), Argument::type(\Iterator::class))->shouldBeCalled();
                 $eventStore = $eventStore->reveal();
             }
@@ -100,7 +100,7 @@ class KernelTest extends TestCase
             if (null === $eventStore) {
                 $eventStore = $this->prophesize(EventStore::class);
                 $eventStore->hasStream('foo')->willReturn(true)->shouldBeCalled();
-                $eventStore->load(Argument::type(StreamName::class), 1, null, null)->willReturn(new Stream(new StreamName('foo'), new \ArrayIterator()))->shouldBeCalled();
+                $eventStore->load(Argument::type(StreamName::class), 1, null, null)->willReturn(new \ArrayIterator())->shouldBeCalled();
                 $eventStore = $eventStore->reveal();
             }
 
@@ -203,7 +203,7 @@ class KernelTest extends TestCase
             $streamName = new StreamName('foo');
             $eventStore = $this->prophesize(EventStore::class);
             $eventStore->hasStream($streamName)->willReturn(true)->shouldBeCalled();
-            $eventStore->load($streamName, 1, null, null)->willReturn(new Stream($streamName, new \ArrayIterator()))->shouldBeCalled();
+            $eventStore->load($streamName, 1, null, null)->willReturn(new \ArrayIterator())->shouldBeCalled();
 
             return $eventStore->reveal();
         };
