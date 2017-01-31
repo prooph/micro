@@ -311,7 +311,6 @@ class KernelTest extends TestCase
             return $eventStore->reveal();
         };
 
-
         $aggregateDefinition = $this->prophesize(AggregateDefiniton::class);
         $aggregateDefinition->extractAggregateVersion($message)->willReturn(42)->shouldBeCalled();
         $aggregateDefinition->metadataEnricher('some_id', 42)->willReturn(
