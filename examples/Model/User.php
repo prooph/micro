@@ -14,7 +14,6 @@ namespace Prooph\MicroExample\Model\User;
 
 use InvalidArgumentException;
 use Prooph\Common\Messaging\Message;
-use Prooph\Micro\AggregateResult;
 use Prooph\MicroExample\Model\Command\ChangeUserName;
 use Prooph\MicroExample\Model\Command\RegisterUser;
 use Prooph\MicroExample\Model\Event\UserNameWasChanged;
@@ -24,28 +23,24 @@ use Prooph\MicroExample\Model\UniqueEmailGuard;
 
 const registerUser = 'Prooph\MicroExample\Model\User\registerUser';
 
-function registerUser(array $state, RegisterUser $command, UniqueEmailGuard $guard): AggregateResult
+function registerUser(callable $stateResolver, RegisterUser $command, UniqueEmailGuard $guard): array
 {
     if ($guard->isUnique($command->email())) {
-        $event = new UserWasRegistered(array_merge($command->payload(), ['version' => 1]));
-    } else {
-        $event = new UserWasRegisteredWithDuplicateEmail(array_merge($command->payload(), ['version' => ++$state['version']]));
+        return [new UserWasRegistered(array_merge($command->payload(), ['version' => 1]))];
     }
 
-    return new AggregateResult(apply($state, $event), $event);
+    return [new UserWasRegisteredWithDuplicateEmail(array_merge($command->payload(), ['version' => ++$stateResolver()['version']]))];
 }
 
 const changeUserName = 'Prooph\MicroExample\Model\User\changeUserName';
 
-function changeUserName(array $state, ChangeUserName $command): AggregateResult
+function changeUserName(callable $stateResolver, ChangeUserName $command): array
 {
     if (! mb_strlen($command->username()) > 3) {
         throw new InvalidArgumentException('Username too short');
     }
 
-    $event = new UserNameWasChanged(array_merge($command->payload(), ['version' => $state['version'] + 1]));
-
-    return new AggregateResult(apply($state, $event), $event);
+    return [new UserNameWasChanged(array_merge($command->payload(), ['version' => ++$stateResolver()['version']]))];
 }
 
 const apply = 'Prooph\MicroExample\Model\User\apply';

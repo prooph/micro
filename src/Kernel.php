@@ -64,23 +64,23 @@ function buildCommandDispatcher(
             return getAggregateDefinition($message, $commandMap);
         };
 
-        $loadState = function (AggregateDefiniton $definiton) use ($message, $snapshotStoreFactory): array {
+        $stateResolver = function () use ($message, $getDefinition, $eventStoreFactory, $snapshotStoreFactory) {
+            $definition = $getDefinition($message);
+
             if (null === $snapshotStoreFactory) {
-                return [];
+                $state = [];
+            } else {
+                $state = loadState($snapshotStoreFactory(), $message, $definition);
             }
 
-            return loadState($snapshotStoreFactory(), $message, $definiton);
-        };
-
-        $reconstituteState = function (array $state) use ($message, $getDefinition, $eventStoreFactory): array {
-            $definition = $getDefinition($message);
             /* @var AggregateDefiniton $definition */
             $aggregateId = $definition->extractAggregateId($message);
 
             if (empty($state)) {
                 $nextVersion = 1;
             } else {
-                $nextVersion = $definition->extractAggregateVersion($state) + 1;
+                $versionKey = $definition->versionName();
+                $nextVersion = $state[$versionKey] + 1;
             }
 
             $events = loadEvents(
@@ -92,28 +92,25 @@ function buildCommandDispatcher(
             return $definition->reconstituteState($state, $events);
         };
 
-        $handleCommand = function (array $state) use ($message, $commandMap): AggregateResult {
+        $handleCommand = function (Message $message) use ($stateResolver, $commandMap): array {
             $handler = getHandler($message, $commandMap);
 
-            $aggregateResult = $handler($state, $message);
+            $events = $handler($stateResolver, $message);
 
-            if (! $aggregateResult instanceof AggregateResult) {
-                throw new RuntimeException('Invalid aggregate result returned');
+            if (! is_array($events)) {
+                throw new RuntimeException('The handler did not return an array');
             }
 
-            return $aggregateResult;
+            return $events;
         };
 
-        $persistEvents = function (AggregateResult $aggregateResult) use ($eventStoreFactory, $message, $getDefinition): AggregateResult {
+        $persistEvents = function (array $events) use ($eventStoreFactory, $message, $getDefinition): array {
             $definition = $getDefinition($message);
 
-            return persistEvents($aggregateResult, $eventStoreFactory, $definition, $definition->extractAggregateId($message));
+            return persistEvents($events, $eventStoreFactory, $definition, $definition->extractAggregateId($message));
         };
 
         return pipeline(
-            $getDefinition,
-            $loadState,
-            $reconstituteState,
             $handleCommand,
             $persistEvents
         )($message);
@@ -175,15 +172,13 @@ function loadEvents(
 const persistEvents = 'Prooph\Micro\Kernel\persistEvents';
 
 function persistEvents(
-    AggregateResult $aggregateResult,
+    array $events,
     callable $eventStoreFactory,
     AggregateDefiniton $definition,
     string $aggregateId
-): AggregateResult {
-    $events = $aggregateResult->raisedEvents();
-
-    $metadataEnricher = function (Message $event) use ($aggregateResult, $definition, $aggregateId) {
-        $aggregateVersion = $definition->extractAggregateVersion($aggregateResult->state());
+): array {
+    $metadataEnricher = function (Message $event) use ($events, $definition, $aggregateId) {
+        $aggregateVersion = $definition->extractAggregateVersion($event);
         $metadataEnricher = $definition->metadataEnricher($aggregateId, $aggregateVersion);
 
         if (null !== $metadataEnricher) {
@@ -209,7 +204,7 @@ function persistEvents(
         $eventStore->create(new Stream($streamName, new \ArrayIterator($events)));
     }
 
-    return new AggregateResult($aggregateResult->state(), ...$events);
+    return $events;
 }
 
 const getHandler = 'Prooph\Micro\Kernel\getHandler';

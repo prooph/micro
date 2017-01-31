@@ -41,9 +41,9 @@ final class TestAggregateDefinition implements AggregateDefiniton
         return 'some_id';
     }
 
-    public function extractAggregateVersion(array $state): int
+    public function extractAggregateVersion(Message $message): int
     {
-        return $state[$this->versionName()];
+        return 1;
     }
 
     public function streamName(string $aggregateId): StreamName

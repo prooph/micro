@@ -75,15 +75,19 @@ final class SnapshotReadModel implements ReadModel
 
     public function persist(): void
     {
+        $snapshots = [];
+
         foreach ($this->cache as $aggregateId => $state) {
-            $this->snapshotStore->save(new Snapshot(
+            $snapshots[] = new Snapshot(
                 $this->aggregateDefinition->aggregateType(),
                 $aggregateId,
                 $state,
                 $state[$this->aggregateDefinition->versionName()],
                 new DateTimeImmutable('now', new \DateTimeZone('UTC'))
-            ));
+            );
         }
+
+        $this->snapshotStore->save(...$snapshots);
 
         $this->cache = [];
     }
