@@ -49,19 +49,22 @@ abstract class AbstractAggregateDefiniton implements AggregateDefiniton
         return $payload[$idKey];
     }
 
-    public function extractAggregateVersion(array $state): int
+    public function extractAggregateVersion(Message $message): int
     {
         $versionKey = $this->versionName();
 
-        if (! array_key_exists($versionKey, $state)) {
+        $payload = $message->payload();
+
+        if (! array_key_exists($versionKey, $payload)) {
             throw new RuntimeException(sprintf(
-                'Missing aggregate version key "%s" in state. State was %s',
+                'Missing aggregate version key "%s" in payload of message %s. Payload was %s',
                 $versionKey,
-                json_encode($state)
+                $message->messageName(),
+                json_encode($payload)
             ));
         }
 
-        return $state[$versionKey];
+        return $payload[$versionKey];
     }
 
     public function metadataMatcher(string $aggregateId, int $aggregateVersion): ?MetadataMatcher

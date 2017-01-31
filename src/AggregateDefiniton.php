@@ -22,13 +22,19 @@ interface AggregateDefiniton
 {
     public function aggregateType(): string;
 
+    /**
+     * Returns the key in message payload to identify the aggregate id
+     */
     public function identifierName(): string;
 
+    /**
+     * Returns the key in message payload and state to identify version number
+     */
     public function versionName(): string;
 
     public function extractAggregateId(Message $message): string;
 
-    public function extractAggregateVersion(array $state): int;
+    public function extractAggregateVersion(Message $message): int;
 
     public function streamName(string $aggregateId): StreamName;
 

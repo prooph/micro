@@ -13,7 +13,6 @@ declare(strict_types=1);
 namespace Prooph\MicroExample\Script;
 
 use Prooph\Common\Messaging\Message;
-use Prooph\Micro\AggregateResult;
 use Prooph\Micro\Kernel;
 use Prooph\MicroExample\Infrastructure\UserAggregateDefinition;
 use Prooph\MicroExample\Model\Command\ChangeUserName;
@@ -33,8 +32,8 @@ $factories = include 'Infrastructure/factories.php';
 
 $commandMap = [
     RegisterUser::class => [
-        'handler' => function (array $state, Message $message) use (&$factories): AggregateResult {
-            return User\registerUser($state, $message, $factories['emailGuard']());
+        'handler' => function (callable $stateResolver, Message $message) use (&$factories): array {
+            return User\registerUser($stateResolver, $message, $factories['emailGuard']());
         },
         'definition' => UserAggregateDefinition::class,
     ],
@@ -52,15 +51,15 @@ $dispatch = Kernel\buildCommandDispatcher(
 
 $command = new RegisterUser(['id' => '1', 'name' => 'Alex', 'email' => 'member@getprooph.org']);
 
-$aggregateResult = $dispatch($command);
+$events = $dispatch($command);
 
-echo "User was registered: \n";
-echo json_encode($aggregateResult->state()) . "\n\n";
+echo "User was registered, emitted event payload: \n";
+echo json_encode($events[0]->payload()) . "\n\n";
 
-$aggregateResult = $dispatch(new ChangeUserName(['id' => '1', 'name' => 'Sascha']));
+$events = $dispatch(new ChangeUserName(['id' => '1', 'name' => 'Sascha']));
 
-echo "Username changed: \n";
-echo json_encode($aggregateResult->state()) . "\n\n";
+echo "Username changed, emitted event payload: \n";
+echo json_encode($events[0]->payload()) . "\n\n";
 
 // should return a TypeError
 $throwable = $dispatch(new InvalidCommand());
