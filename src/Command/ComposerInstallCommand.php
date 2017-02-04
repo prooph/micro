@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 namespace Prooph\Micro\Command;
 
-final class ComposerInstallCommand extends AbstractComposerCommand
+class ComposerInstallCommand extends AbstractComposerCommand
 {
     protected function getComposerCommand(): string
     {
