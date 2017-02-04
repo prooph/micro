@@ -8,13 +8,13 @@
  * file that was distributed with this source code.
  */
 
-declare(strict_types = 1);
+declare(strict_types=1);
 
 namespace ProophTest\Micro\Command;
 
 use PhpCsFixer\Console\Application;
-use Prooph\Micro\Command\AbstractComposerCommand;
 use PHPUnit\Framework\TestCase;
+use Prooph\Micro\Command\AbstractComposerCommand;
 use Symfony\Component\Console\Tester\CommandTester;
 
 /**
@@ -73,7 +73,7 @@ abstract class ComposerCommandTestCase extends TestCase
      */
     public function it_aborts_if_no_php_service_is_declared(): void
     {
-        file_put_contents($this->getTempDirectory() . '/docker-compose.yml', "services: []");
+        file_put_contents($this->getTempDirectory() . '/docker-compose.yml', 'services: []');
 
         $commandTester = new CommandTester($this->command);
         $commandTester->execute([]);
@@ -108,7 +108,7 @@ EOL
 );
 
         $commandTester = new CommandTester($this->command);
-        $commandTester->setInputs([0]); # we choose the first service here
+        $commandTester->setInputs([0]); // we choose the first service here
         $commandTester->execute(['--docker-executable' => 'echo']);
 
         $display = $commandTester->getDisplay();
@@ -143,7 +143,7 @@ EOL
         $commandTester = new CommandTester($this->command);
         $commandTester->execute([
             'service' => 'php_service1',
-            '--docker-executable' => 'echo'
+            '--docker-executable' => 'echo',
         ]);
 
         $display = $commandTester->getDisplay();
@@ -174,7 +174,7 @@ EOL
         $commandTester->setInputs([0]);
         $commandTester->execute([
             'service' => 'not_a_service',
-            '--docker-executable' => 'echo'
+            '--docker-executable' => 'echo',
         ]);
 
         $display = $commandTester->getDisplay();
@@ -207,7 +207,7 @@ EOL
         $commandTester = new CommandTester($this->command);
         $commandTester->execute([
             '--all' => true,
-            '--docker-executable' => 'echo'
+            '--docker-executable' => 'echo',
         ]);
 
         $display = $commandTester->getDisplay();
@@ -246,18 +246,18 @@ EOL
 
     private function prepareTempDirectories(): void
     {
-        if (!is_dir($this->getTempDirectory())) {
+        if (! is_dir($this->getTempDirectory())) {
             mkdir($this->getTempDirectory(), 0777, true);
         }
 
-        if (!is_dir($this->getServiceDirectory())) {
+        if (! is_dir($this->getServiceDirectory())) {
             mkdir($this->getServiceDirectory(), 0777, true);
         }
     }
 
     private function prepareServiceComposerFile(string $serviceName): void
     {
-        if (!is_dir($this->getServiceDirectory() . '/' . $serviceName)) {
+        if (! is_dir($this->getServiceDirectory() . '/' . $serviceName)) {
             mkdir($this->getServiceDirectory() . '/' . $serviceName, 0777, true);
         }
 
