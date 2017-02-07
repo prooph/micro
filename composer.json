@@ -26,18 +26,12 @@
         "prooph/event-store": "7.0.x-dev",
         "prooph/pdo-event-store": "dev-master",
         "prooph/snapshot-store": "dev-master",
-        "prooph/php-cs-fixer-config": "^0.1.1",
-        "beberlei/assert": "^2.7",
-        "symfony/console": "^3.2.2",
-        "symfony/filesystem": "^3.2.2",
-        "symfony/yaml": "^3.2.2",
-        "symfony/process": ">=2.4.0",
-        "madkom/nginx-configurator": "dev-master",
-        "ferno/loco": "dev-master"
+        "beberlei/assert": "^2.7"
     },
     "require-dev": {
-        "phpunit/phpunit": "^5.7",
+        "phpunit/phpunit": "^6.0",
         "phpspec/prophecy": "dev-patch-1 as 1.6.2",
+        "prooph/php-cs-fixer-config": "^0.1.1",
         "satooshi/php-coveralls": "^1.0",
         "malukenho/docheader": "^0.1.4"
     },
@@ -58,9 +52,6 @@
             "ProophTest\\Micro\\": "tests/"
         }
     },
-    "bin": [
-        "bin/micro"
-    ],
     "scripts": {
         "check": [
             "@cs",

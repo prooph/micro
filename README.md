@@ -8,13 +8,13 @@
 composer install
 ```
 
-## Usage
+## Example usage
 
 ```bash
 php examples/register_and_change_username.php
 ```
 
-## Run snapshotter
+## Run example snapshotter
 
 ```bash
 php examples/user_snapshotter.php
@@ -24,11 +24,10 @@ php examples/user_snapshotter.php
 
 [prooph/micro-do](https://github.com/prooph/micro-do)
 
-
 ## Support
 
 - Ask questions on [prooph-users](https://groups.google.com/forum/?hl=de#!forum/prooph) mailing list.
-- File issues at [https://github.com/prooph/event-store/issues](https://github.com/prooph/event-store/issues).
+- File issues at [https://github.com/prooph/micro/issues](https://github.com/prooph/micro/issues).
 - Say hello in the [prooph gitter](https://gitter.im/prooph/improoph) chat.
 
 ## Contribute
