@@ -36,11 +36,13 @@ interface AggregateDefiniton
 
     public function extractAggregateVersion(Message $message): int;
 
-    public function streamName(string $aggregateId): StreamName;
+    public function streamName(): StreamName;
 
     public function metadataEnricher(string $aggregateId, int $aggregateVersion): ?MetadataEnricher;
 
     public function metadataMatcher(string $aggregateId, int $aggregateVersion): ?MetadataMatcher;
+
+    public function hasOneStreamPerAggregate(): bool;
 
     public function reconstituteState(array $state, Iterator $events): array;
 

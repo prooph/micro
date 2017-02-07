@@ -24,9 +24,9 @@ final class UserAggregateDefinition extends AbstractAggregateDefiniton
         return 'user';
     }
 
-    public function streamName(string $aggregateId): StreamName
+    public function streamName(): StreamName
     {
-        return new StreamName('user_stream'); // add aggregate id for one stream per aggregate
+        return new StreamName('user_stream');
     }
 
     public function apply(array $state, Message ...$events): array

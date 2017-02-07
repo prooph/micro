@@ -124,7 +124,7 @@ class AbstractAggregateDefinitionTest extends TestCase
     public function createDefinition(): AbstractAggregateDefiniton
     {
         return new class() extends AbstractAggregateDefiniton {
-            public function streamName(string $aggregateId): StreamName
+            public function streamName(): StreamName
             {
                 return new StreamName('foo');
             }

@@ -69,6 +69,8 @@ abstract class AbstractAggregateDefiniton implements AggregateDefiniton
 
     public function metadataMatcher(string $aggregateId, int $aggregateVersion): ?MetadataMatcher
     {
+        // if one stream per aggregate is used, you can simply return null instead
+
         return (new MetadataMatcher())
             ->withMetadataMatch('_aggregate_id', Operator::EQUALS(), $aggregateId)
 
@@ -111,5 +113,10 @@ abstract class AbstractAggregateDefiniton implements AggregateDefiniton
     public function reconstituteState(array $state, Iterator $events): array
     {
         return $this->apply($state, ...$events);
+    }
+
+    public function hasOneStreamPerAggregate(): bool
+    {
+        return false;
     }
 }

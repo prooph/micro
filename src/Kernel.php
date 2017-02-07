@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 namespace Prooph\Micro\Kernel;
 
-use ArrayIterator;
+use EmptyIterator;
 use Iterator;
 use Prooph\Common\Messaging\Message;
 use Prooph\EventStore\EventStore;
@@ -83,11 +83,7 @@ function buildCommandDispatcher(
                 $nextVersion = $state[$versionKey] + 1;
             }
 
-            $events = loadEvents(
-                $definition->streamName($aggregateId),
-                $definition->metadataMatcher($aggregateId, $nextVersion),
-                $eventStoreFactory
-            );
+            $events = loadEvents($definition, $aggregateId, $nextVersion, $eventStoreFactory);
 
             return $definition->reconstituteState($state, $events);
         };
@@ -152,8 +148,9 @@ function loadState(SnapshotStore $snapshotStore, Message $message, AggregateDefi
 const loadEvents = 'Prooph\Micro\Kernel\loadEvents';
 
 function loadEvents(
-    StreamName $streamName,
-    ?MetadataMatcher $metadataMatcher,
+    AggregateDefiniton $definition,
+    string $aggregateId,
+    int $nextVersion,
     callable $eventStoreFactory
 ): Iterator {
     $eventStore = $eventStoreFactory();
@@ -162,11 +159,20 @@ function loadEvents(
         throw new RuntimeException('$eventStoreFactory did not return an instance of ' . EventStore::class);
     }
 
-    if ($eventStore->hasStream($streamName)) {
-        return $eventStore->load($streamName, 1, null, $metadataMatcher);
+    $streamName = $definition->streamName();
+    $metadataMatcher = $definition->metadataMatcher($aggregateId, $nextVersion);
+
+    if (! $eventStore->hasStream($streamName)) {
+        return new EmptyIterator();
     }
 
-    return new ArrayIterator();
+    if ($definition->hasOneStreamPerAggregate()) {
+        $streamName = new StreamName($streamName->toString() . '-' . $aggregateId); // append aggregate id to stream name
+    } else {
+        $nextVersion = 1; // we don't know the event position, the metadata matcher will help, we start at 1
+    }
+
+    return $eventStore->load($streamName, $nextVersion, null, $metadataMatcher);
 }
 
 const persistEvents = 'Prooph\Micro\Kernel\persistEvents';
@@ -177,6 +183,12 @@ function persistEvents(
     AggregateDefiniton $definition,
     string $aggregateId
 ): array {
+    $eventStore = $eventStoreFactory();
+
+    if (! $eventStore instanceof EventStore) {
+        throw new RuntimeException('$eventStoreFactory did not return an instance of ' . EventStore::class);
+    }
+
     $metadataEnricher = function (Message $event) use ($events, $definition, $aggregateId) {
         $aggregateVersion = $definition->extractAggregateVersion($event);
         $metadataEnricher = $definition->metadataEnricher($aggregateId, $aggregateVersion);
@@ -190,12 +202,10 @@ function persistEvents(
 
     $events = array_map($metadataEnricher, $events);
 
-    $streamName = $definition->streamName($aggregateId);
+    $streamName = $definition->streamName();
 
-    $eventStore = $eventStoreFactory();
-
-    if (! $eventStore instanceof EventStore) {
-        throw new RuntimeException('$eventStoreFactory did not return an instance of ' . EventStore::class);
+    if ($definition->hasOneStreamPerAggregate()) {
+        $streamName = new StreamName($streamName->toString() . '-' . $aggregateId); // append aggregate id to stream name
     }
 
     if ($eventStore->hasStream($streamName)) {
