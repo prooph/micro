@@ -52,9 +52,7 @@ class CreatePostgresCommand extends AbstractCommand
         $question = new Question('Name of the service (f.e. postgres): ');
         $question->setValidator(function ($answer) {
             if (! is_string($answer) || ! preg_match('/^[a-z-0-9]+$/', $answer)) {
-                throw new \RuntimeException(
-                    'Invalid service name'
-                );
+                throw new \RuntimeException('Invalid service name');
             }
 
             return $answer;
@@ -84,9 +82,7 @@ class CreatePostgresCommand extends AbstractCommand
         $question = new Question('Database name: ', false);
         $question->setValidator(function ($answer) {
             if (! is_string($answer) || strlen($answer) === 0) {
-                throw new \RuntimeException(
-                    'Database name cannot be empty'
-                );
+                throw new \RuntimeException('Database name cannot be empty');
             }
 
             return $answer;
@@ -103,9 +99,7 @@ class CreatePostgresCommand extends AbstractCommand
             }
 
             if (! is_int((int) $answer) || 0 === (int) $answer) {
-                throw new \RuntimeException(
-                    'Invalid PostgreSQL port'
-                );
+                throw new \RuntimeException('Invalid PostgreSQL port');
             }
 
             return $answer;
@@ -123,9 +117,7 @@ class CreatePostgresCommand extends AbstractCommand
         $question = new Question('PostgreSQL password: ', '');
         $question->setValidator(function ($answer) {
             if (! is_string($answer)) {
-                throw new \RuntimeException(
-                    'Invalid password'
-                );
+                throw new \RuntimeException('Invalid password');
             }
 
             return $answer;
@@ -138,9 +130,7 @@ class CreatePostgresCommand extends AbstractCommand
         $question = new Question('Mount docker-entrypoint-initdb.d: ', '');
         $question->setValidator(function ($answer) {
             if (! is_string($answer)) {
-                throw new \RuntimeException(
-                    'Invalid docker-entrypoint-initdb.d'
-                );
+                throw new \RuntimeException('Invalid docker-entrypoint-initdb.d');
             }
 
             return $answer;

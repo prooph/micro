@@ -70,9 +70,7 @@ class SetupCommand extends AbstractCommand
                 }
 
                 if (! is_int((int) $answer) || 0 === (int) $answer) {
-                    throw new \RuntimeException(
-                        'Invalid HTTP port'
-                    );
+                    throw new \RuntimeException('Invalid HTTP port');
                 }
 
                 return $answer;
@@ -90,9 +88,7 @@ class SetupCommand extends AbstractCommand
                 }
 
                 if (! is_int((int) $answer) || 0 === (int) $answer) {
-                    throw new \RuntimeException(
-                        'Invalid HTTPS port'
-                    );
+                    throw new \RuntimeException('Invalid HTTPS port');
                 }
 
                 return $answer;

@@ -63,9 +63,7 @@ class CreatePhpServiceCommand extends AbstractCommand
         $question = new Question('Name of the service: ');
         $question->setValidator(function ($answer) {
             if (! is_string($answer) || ! preg_match('/^[a-z-0-9]+$/', $answer)) {
-                throw new \RuntimeException(
-                    'Invalid service name'
-                );
+                throw new \RuntimeException('Invalid service name');
             }
 
             return $answer;
@@ -73,6 +71,10 @@ class CreatePhpServiceCommand extends AbstractCommand
         $question->setMaxAttempts(2);
 
         $serviceName = $io->askQuestion($question);
+
+        if (is_dir($this->getRootDir() . '/service/' . $serviceName)) {
+            throw new \RuntimeException('Service directory exists already');
+        }
 
         $question = new ChoiceQuestion('Which PHP image to use?', [
             'prooph/php:7.1-cli',
@@ -89,9 +91,7 @@ class CreatePhpServiceCommand extends AbstractCommand
         $question = new Question('Give the directory in which to mount the service (defaults to: "/var/www")', '/var/www');
         $question->setValidator(function ($answer) {
             if (! is_string($answer) || strlen($answer) === 0) {
-                throw new \RuntimeException(
-                    'Invalid service name'
-                );
+                throw new \RuntimeException('Invalid service name');
             }
 
             return $answer;
@@ -120,9 +120,7 @@ class CreatePhpServiceCommand extends AbstractCommand
             $question = new Question('Add upstream (f.e. "php-user-GET"): ');
             $question->setValidator(function ($answer) {
                 if (! is_string($answer) || strlen($answer) === 0) {
-                    throw new \RuntimeException(
-                        'Invalid upstream'
-                    );
+                    throw new \RuntimeException('Invalid upstream');
                 }
 
                 return $answer;
@@ -139,9 +137,7 @@ class CreatePhpServiceCommand extends AbstractCommand
             $question = new Question('Add location (f.e. "= /api/v1/user-$request_method"): ');
             $question->setValidator(function ($answer) {
                 if (! is_string($answer) || 0 === strlen($answer)) {
-                    throw new \RuntimeException(
-                        'Invalid location'
-                    );
+                    throw new \RuntimeException('Invalid location');
                 }
 
                 return $answer;
@@ -173,9 +169,7 @@ class CreatePhpServiceCommand extends AbstractCommand
             $question = new Question('Enter the start command (f.e. "php run.php"): ', '');
             $question->setValidator(function ($answer) {
                 if (! is_string($answer) || strlen($answer) === 0) {
-                    throw new \RuntimeException(
-                        'Invalid command'
-                    );
+                    throw new \RuntimeException('Invalid command');
                 }
 
                 return $answer;
@@ -273,6 +267,8 @@ class CreatePhpServiceCommand extends AbstractCommand
         }
 
         $this->updateConfig($serviceName, $config);
+
+        mkdir($this->getRootDir() . '/service/' . $serviceName);
 
         $io->success('Successfully updated microservice settings');
 

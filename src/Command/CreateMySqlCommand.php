@@ -52,9 +52,7 @@ class CreateMySqlCommand extends AbstractCommand
         $question = new Question('Name of the service (f.e. mysql): ');
         $question->setValidator(function ($answer) {
             if (! is_string($answer) || ! preg_match('/^[a-z-0-9]+$/', $answer)) {
-                throw new \RuntimeException(
-                    'Invalid service name'
-                );
+                throw new \RuntimeException('Invalid service name');
             }
 
             return $answer;
@@ -77,9 +75,7 @@ class CreateMySqlCommand extends AbstractCommand
         $question = new Question('Database name: ', false);
         $question->setValidator(function ($answer) {
             if (! is_string($answer) || strlen($answer) === 0) {
-                throw new \RuntimeException(
-                    'Database name cannot be empty'
-                );
+                throw new \RuntimeException('Database name cannot be empty');
             }
 
             return $answer;
@@ -96,9 +92,7 @@ class CreateMySqlCommand extends AbstractCommand
             }
 
             if (! is_int((int) $answer) || 0 === (int) $answer) {
-                throw new \RuntimeException(
-                    'Invalid MySQL port'
-                );
+                throw new \RuntimeException('Invalid MySQL port');
             }
 
             return $answer;
@@ -111,9 +105,7 @@ class CreateMySqlCommand extends AbstractCommand
         $question = new Question('MySQL root password: ', '');
         $question->setValidator(function ($answer) {
             if (! is_string($answer)) {
-                throw new \RuntimeException(
-                    'Invalid password'
-                );
+                throw new \RuntimeException('Invalid password');
             }
 
             return $answer;
@@ -129,9 +121,7 @@ class CreateMySqlCommand extends AbstractCommand
             $question = new Question('MySQL user: ', '');
             $question->setValidator(function ($answer) {
                 if (! is_string($answer) || strlen($answer) === 0) {
-                    throw new \RuntimeException(
-                        'Invalid user'
-                    );
+                    throw new \RuntimeException('Invalid user');
                 }
 
                 return $answer;
@@ -144,9 +134,7 @@ class CreateMySqlCommand extends AbstractCommand
             $question = new Question('MySQL password: ', '');
             $question->setValidator(function ($answer) {
                 if (! is_string($answer) || strlen($answer) === 0) {
-                    throw new \RuntimeException(
-                        'Invalid password'
-                    );
+                    throw new \RuntimeException('Invalid password');
                 }
 
                 return $answer;

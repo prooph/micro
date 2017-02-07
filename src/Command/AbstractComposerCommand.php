@@ -63,7 +63,7 @@ abstract class AbstractComposerCommand extends AbstractCommand
         $declaredPhpServices = $this->getDeclaredPhpServices();
 
         if (! $declaredPhpServices) {
-            $io->warning('No php services declared in docker-compose.yml. Aborting');
+            $io->warning('No php services declared in docker-compose.yml or no composer.json files found. Aborting');
 
             return 1;
         }
