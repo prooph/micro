@@ -19,7 +19,7 @@ use Prooph\EventStore\Metadata\MetadataMatcher;
 use Prooph\EventStore\StreamName;
 use Prooph\Micro\AggregateDefiniton;
 
-final class TestAggregateDefinition implements AggregateDefiniton
+final class SingleStreamTestAggregateDefinition implements AggregateDefiniton
 {
     public function identifierName(): string
     {
@@ -46,7 +46,7 @@ final class TestAggregateDefinition implements AggregateDefiniton
         return 1;
     }
 
-    public function streamName(string $aggregateId): StreamName
+    public function streamName(): StreamName
     {
         return new StreamName('foo');
     }
@@ -69,5 +69,10 @@ final class TestAggregateDefinition implements AggregateDefiniton
     public function apply(array $state, Message ...$events): array
     {
         return [];
+    }
+
+    public function hasOneStreamPerAggregate(): bool
+    {
+        return false;
     }
 }
