@@ -26,6 +26,19 @@ abstract class AbstractCommand extends Command
         }
     }
 
+    protected function getServiceDirPath($serviceName): string
+    {
+        return $this->getRootDir() . '/service/' . $serviceName;
+    }
+
+    protected function getDockerComposeConfig(): array
+    {
+        $configFileName = $this->getRootDir() . '/docker-compose.yml';
+        $configFile = file_get_contents($configFileName);
+
+        return Yaml::parse($configFile);
+    }
+
     protected function updateConfig(string $serviceName, array $config): void
     {
         $configFileName = $this->getRootDir() . '/docker-compose.yml';
