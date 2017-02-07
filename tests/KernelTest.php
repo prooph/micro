@@ -247,7 +247,7 @@ class KernelTest extends TestCase
     /**
      * @test
      */
-    public function it_loads_throws_exception_when_loading_events_with_invalid_event_store_factory(): void
+    public function it_throws_exception_when_loading_events_with_invalid_event_store_factory(): void
     {
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('$eventStoreFactory did not return an instance of ' . EventStore::class);
