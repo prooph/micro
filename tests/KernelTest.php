@@ -27,7 +27,6 @@ use Prooph\SnapshotStore\Snapshot;
 use Prooph\SnapshotStore\SnapshotStore;
 use ProophTest\Micro\TestAsset\OneStreamPerAggregateTestAggregateDefinition;
 use ProophTest\Micro\TestAsset\SingleStreamTestAggregateDefinition;
-use ProophTest\Micro\TestAsset\TestDomainEvent;
 use Prophecy\Argument;
 
 class KernelTest extends TestCase
@@ -372,7 +371,6 @@ class KernelTest extends TestCase
                 $eventStore->appendTo(Argument::any(), Argument::any())->willThrow(\Exception::class)->shouldBeCalledTimes(1);
                 $eventStore = $eventStore->reveal();
             }
-
 
             return $eventStore;
         };
