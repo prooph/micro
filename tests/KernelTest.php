@@ -15,9 +15,11 @@ namespace ProophTest\Micro;
 use PHPUnit\Framework\TestCase;
 use Prooph\Common\Messaging\Message;
 use Prooph\EventStore\EventStore;
+use Prooph\EventStore\InMemoryEventStore;
 use Prooph\EventStore\Metadata\MetadataEnricher;
 use Prooph\EventStore\Stream;
 use Prooph\EventStore\StreamName;
+use Prooph\EventStore\TransactionalEventStore;
 use Prooph\Micro\AggregateDefiniton;
 use Prooph\Micro\Kernel as f;
 use Prooph\SnapshotStore\InMemorySnapshotStore;
@@ -323,6 +325,68 @@ class KernelTest extends TestCase
         $result = f\persistEvents($raisedEvents, $factory, $aggregateDefinition->reveal(), 'some_id');
 
         $this->assertSame($raisedEvents, $result);
+    }
+
+    /**
+     * @test
+     */
+    public function it_persist_transactional_when_using_transactional_event_store(): void
+    {
+        $factory = function (): EventStore {
+            return new InMemoryEventStore();
+        };
+
+        $message = $this->prophesize(Message::class);
+        $raisedEvents = [$message->reveal()];
+
+        $aggregateDefinition = $this->prophesize(AggregateDefiniton::class);
+        $aggregateDefinition->extractAggregateVersion($message)->willReturn(42)->shouldBeCalled();
+        $aggregateDefinition->metadataEnricher('some_id', 42)->willReturn(null)->shouldBeCalled();
+        $aggregateDefinition->streamName()->willReturn(new StreamName('foo'))->shouldBeCalled();
+        $aggregateDefinition->hasOneStreamPerAggregate()->willReturn(false)->shouldBeCalled();
+
+        $result = f\persistEvents($raisedEvents, $factory, $aggregateDefinition->reveal(), 'some_id');
+
+        $this->assertSame($raisedEvents, $result);
+    }
+
+    /**
+     * @test
+     */
+    public function it_rolls_back_transaction_during_persist_when_using_transactional_event_store(): void
+    {
+        $this->expectException(\Exception::class);
+
+        $factory = function (): TransactionalEventStore {
+            static $eventStore = null;
+
+            if (null === $eventStore) {
+                $eventStore = $this->prophesize(TransactionalEventStore::class);
+
+                $eventStore->beginTransaction()->shouldBeCalledTimes(2);
+                $eventStore->commit()->shouldBeCalledTimes(1);
+                $eventStore->rollback()->shouldBeCalledTimes(1);
+                $eventStore->hasStream(Argument::any())->willReturn(false, true)->shouldBeCalledTimes(2);
+                $eventStore->create(Argument::any())->shouldBeCalledTimes(1);
+                $eventStore->appendTo(Argument::any(), Argument::any())->willThrow(\Exception::class)->shouldBeCalledTimes(1);
+                $eventStore = $eventStore->reveal();
+            }
+
+            return $eventStore;
+        };
+
+        $message = $this->prophesize(Message::class);
+        $message->metadata()->willReturn([]);
+        $raisedEvents = [$message->reveal()];
+
+        $aggregateDefinition = $this->prophesize(AggregateDefiniton::class);
+        $aggregateDefinition->extractAggregateVersion($message)->willReturn(1)->shouldBeCalled();
+        $aggregateDefinition->metadataEnricher('one', 1)->willReturn(null)->shouldBeCalled();
+        $aggregateDefinition->streamName()->willReturn(new StreamName('foo'))->shouldBeCalled();
+        $aggregateDefinition->hasOneStreamPerAggregate()->willReturn(true)->shouldBeCalled();
+
+        f\persistEvents($raisedEvents, $factory, $aggregateDefinition->reveal(), 'one');
+        f\persistEvents($raisedEvents, $factory, $aggregateDefinition->reveal(), 'one');
     }
 
     /**

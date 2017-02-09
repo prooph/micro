@@ -19,6 +19,7 @@ use Prooph\EventStore\EventStore;
 use Prooph\EventStore\Metadata\MetadataMatcher;
 use Prooph\EventStore\Stream;
 use Prooph\EventStore\StreamName;
+use Prooph\EventStore\TransactionalEventStore;
 use Prooph\Micro\AggregateDefiniton;
 use Prooph\Micro\AggregateResult;
 use Prooph\SnapshotStore\SnapshotStore;
@@ -208,10 +209,26 @@ function persistEvents(
         $streamName = new StreamName($streamName->toString() . '-' . $aggregateId); // append aggregate id to stream name
     }
 
-    if ($eventStore->hasStream($streamName)) {
-        $eventStore->appendTo($streamName, new \ArrayIterator($events));
-    } else {
-        $eventStore->create(new Stream($streamName, new \ArrayIterator($events)));
+    if ($eventStore instanceof TransactionalEventStore) {
+        $eventStore->beginTransaction();
+    }
+
+    try {
+        if ($eventStore->hasStream($streamName)) {
+            $eventStore->appendTo($streamName, new \ArrayIterator($events));
+        } else {
+            $eventStore->create(new Stream($streamName, new \ArrayIterator($events)));
+        }
+    } catch (\Throwable $e) {
+        if ($eventStore instanceof TransactionalEventStore) {
+            $eventStore->rollback();
+        }
+
+        throw $e;
+    }
+
+    if ($eventStore instanceof TransactionalEventStore) {
+        $eventStore->commit();
     }
 
     return $events;
