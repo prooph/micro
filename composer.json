@@ -22,11 +22,9 @@
         "prooph"
     ],
     "require": {
-        "prooph/common": "4.0.x-dev",
         "prooph/event-store": "7.0.x-dev",
         "prooph/pdo-event-store": "dev-master",
-        "prooph/snapshot-store": "dev-master",
-        "beberlei/assert": "^2.7"
+        "prooph/snapshot-store": "dev-master"
     },
     "require-dev": {
         "phpunit/phpunit": "^6.0",
