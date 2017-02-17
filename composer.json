@@ -22,7 +22,7 @@
         "prooph"
     ],
     "require": {
-        "prooph/common": "4.0.x-dev",
+        "prooph/common": "^4.0",
         "prooph/event-store": "7.0.x-dev",
         "prooph/pdo-event-store": "dev-master",
         "prooph/snapshot-store": "dev-master",
