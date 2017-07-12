@@ -269,7 +269,8 @@ function getAggregateDefinition(Message $message, array $commandMap): AggregateD
 
 const curry = 'Prooph\Micro\Kernel\curry';
 
-function curry(callable $f, ...$args) {
+function curry(callable $f, ...$args)
+{
     return function (...$partialArgs) use ($f, $args) {
         return (function ($args) use ($f) {
             return count($args) < (new \ReflectionFunction($f))->getNumberOfRequiredParameters()
@@ -281,7 +282,8 @@ function curry(callable $f, ...$args) {
 
 const o = 'Prooph\Micro\Kernel\o';
 
-function o(callable $g): callable {
+function o(callable $g): callable
+{
     return function (callable $f) use ($g): callable {
         return function ($x) use ($g, $f) {
             return $g($f($x));
@@ -291,6 +293,7 @@ function o(callable $g): callable {
 
 const id = 'Prooph\Micro\Kernel\id';
 
-function id($x) {
+function id($x)
+{
     return $x;
-};
+}

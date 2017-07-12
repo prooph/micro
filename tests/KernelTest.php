@@ -572,9 +572,9 @@ class KernelTest extends TestCase
      */
     public function it_returns_identity(): void
     {
-       $result = f\id(4);
+        $result = f\id(4);
 
-       $this->assertSame(4, $result);
+        $this->assertSame(4, $result);
     }
 
     /**
@@ -582,19 +582,19 @@ class KernelTest extends TestCase
      */
     public function it_composes(): void
     {
-       $f = function ($x) {
-           return $x + 1;
-       };
+        $f = function ($x) {
+            return $x + 1;
+        };
 
-       $g = function ($x) {
-           return $x + 2;
-       };
+        $g = function ($x) {
+            return $x + 2;
+        };
 
-       $h = f\o($g)($f);
+        $h = f\o($g)($f);
 
-       $result = $h(1);
+        $result = $h(1);
 
-       $this->assertEquals(4, $result);
+        $this->assertEquals(4, $result);
     }
 
     /**
