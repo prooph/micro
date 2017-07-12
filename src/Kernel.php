@@ -23,7 +23,6 @@ use Prooph\Micro\AggregateDefiniton;
 use Prooph\Micro\Functional as f;
 use Prooph\SnapshotStore\SnapshotStore;
 use RuntimeException;
-use Throwable;
 
 const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
 
@@ -106,10 +105,10 @@ function buildCommandDispatcher(
             return persistEvents($events, $eventStoreFactory, $definition, $definition->extractAggregateId($message));
         };
 
-        return f\pipe(
+        return f\pipe([
             $handleCommand,
             $persistEvents
-        )($message);
+        ])($message);
     };
 }
 

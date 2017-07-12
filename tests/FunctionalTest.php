@@ -22,7 +22,7 @@ class FunctionalTest extends TestCase
      */
     public function it_pipes(): void
     {
-        $result = f\pipe('strtolower', 'ucfirst')('aBC');
+        $result = f\pipe(['strtolower', 'ucfirst'])('aBC');
 
         $this->assertSame('Abc', $result);
     }
@@ -32,9 +32,9 @@ class FunctionalTest extends TestCase
      */
     public function it_handles_exceptions_in_pipe(): void
     {
-        $result = f\pipe(function () {
+        $result = f\pipe([function () {
             throw new \Exception('Exception there!');
-        }, 'ucfirst')('aBC');
+        }, 'ucfirst'])('aBC');
 
         $this->assertInstanceOf(\Exception::class, $result);
         $this->assertSame('Exception there!', $result->getMessage());
@@ -45,9 +45,9 @@ class FunctionalTest extends TestCase
      */
     public function it_pipes_in_right_order(): void
     {
-       $result = f\pipe('strtolower', 'strtoupper')('aBc');
+        $result = f\pipe(['strtolower', 'strtoupper'])('aBc');
 
-       $this->assertSame('ABC', $result);
+        $this->assertSame('ABC', $result);
     }
 
     /**
@@ -55,7 +55,7 @@ class FunctionalTest extends TestCase
      */
     public function it_composes(): void
     {
-        $result = f\compose('ucfirst', 'strtolower')('aBC');
+        $result = f\compose(['ucfirst', 'strtolower'])('aBC');
 
         $this->assertSame('Abc', $result);
     }
@@ -65,9 +65,9 @@ class FunctionalTest extends TestCase
      */
     public function it_handles_exceptions_in_compose(): void
     {
-        $result = f\compose(function () {
+        $result = f\compose([function () {
             throw new \Exception('Exception there!');
-        }, 'ucfirst')('aBC');
+        }, 'ucfirst'])('aBC');
 
         $this->assertInstanceOf(\Exception::class, $result);
         $this->assertSame('Exception there!', $result->getMessage());
@@ -78,7 +78,7 @@ class FunctionalTest extends TestCase
      */
     public function it_composes_in_right_order(): void
     {
-        $result = f\compose('strtoupper', 'strtolower')('aBc');
+        $result = f\compose(['strtoupper', 'strtolower'])('aBc');
 
         $this->assertSame('ABC', $result);
     }
@@ -132,5 +132,126 @@ class FunctionalTest extends TestCase
             [2, 3, 4, 5, 6],
             $result
         );
+    }
+
+    /**
+     * @test
+     */
+    public function it_curries_2(): void
+    {
+        $filter = f\curry(function (callable $f, $l): array {
+            return array_filter($l, $f);
+        });
+
+        $isEven = function (int $x): bool {
+            return $x % 2 === 0;
+        };
+
+        $filterEven = $filter($isEven);
+
+        $this->assertSame([2, 4], array_values($filterEven([1, 2, 3, 4, 5])));
+    }
+
+    /**
+     * @test
+     */
+    public function it_combines_using_little_circle(): void
+    {
+        $g = function ($x) {
+            return $x + 3;
+        };
+
+        $f = function ($x) {
+            return $x + 5;
+        };
+
+        $h = f\o($f)($g);
+
+        $result1 = $h(1);
+
+        $g2 = function ($x) {
+            return $x + 10;
+        };
+
+        $f2 = function ($x) {
+            return $x + 20;
+        };
+
+        $h2 = f\o($f2)($g2);
+
+        $result2 = $h2($result1);
+
+        $h3 = f\o($h)($h2);
+
+        $result3 = $h3(1);
+
+        $h4 = f\o($h2)($h);
+
+        $result4 = $h4(1);
+
+        $this->assertSame(9, $result1);
+        $this->assertSame(39, $result2);
+        $this->assertSame($result2, $result3);
+        $this->assertSame($result2, $result4);
+    }
+
+    /**
+     * @test
+     */
+    public function it_Y_cominates_using_factorial_example(): void
+    {
+        $factorial = f\Y(function (callable $fact) {
+            return function (int $n) use ($fact) {
+                return ($n <= 1) ? 1 : $n * $fact($n - 1);
+            };
+        });
+
+        $this->assertSame(720, $factorial(6));
+    }
+
+    /**
+     * @test
+     */
+    public function it_folds_left(): void
+    {
+        $foldl = f\foldl(0)(f\curry(function ($x, $y) {
+            return $x + $y;
+        }));
+
+        $result = $foldl([1, 2, 3]);
+
+        $this->assertSame(6, $result);
+    }
+
+    /**
+     * @test
+     */
+    public function it_folds_right(): void
+    {
+        $foldr = f\foldr(0)(f\curry(function ($x, $y) {
+            return $x + $y;
+        }));
+
+        $result = $foldr([1, 2, 3]);
+
+        $this->assertSame(6, $result);
+    }
+
+    /**
+     * @test
+     */
+    public function it_maps_array(): void
+    {
+        $map = f\map(function ($x) {
+            return $x + 1;
+        });
+
+        $result = $map([1, 2, 3, 4, 5]);
+
+        $this->assertSame([2, 3, 4, 5, 6], $result);
+
+        $result2 = $map(new \ArrayIterator([1, 2, 3, 4, 5]));
+
+        $this->assertEquals(new \ArrayIterator([2, 3, 4, 5, 6]), $result2);
     }
 }
