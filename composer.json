@@ -42,6 +42,7 @@
             "Prooph\\Micro\\": "src/"
         },
         "files": [
+            "src/Functional.php",
             "src/Kernel.php"
         ]
     },

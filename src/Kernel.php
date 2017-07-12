@@ -20,6 +20,7 @@ use Prooph\EventStore\Stream;
 use Prooph\EventStore\StreamName;
 use Prooph\EventStore\TransactionalEventStore;
 use Prooph\Micro\AggregateDefiniton;
+use Prooph\Micro\Functional as f;
 use Prooph\SnapshotStore\SnapshotStore;
 use RuntimeException;
 use Throwable;
@@ -105,29 +106,10 @@ function buildCommandDispatcher(
             return persistEvents($events, $eventStoreFactory, $definition, $definition->extractAggregateId($message));
         };
 
-        return pipeline(
+        return f\pipe(
             $handleCommand,
             $persistEvents
         )($message);
-    };
-}
-
-const pipeline = 'Prooph\Micro\Kernel\pipeline';
-
-function pipeline(callable $firstCallback, callable ...$callbacks): callable
-{
-    array_unshift($callbacks, $firstCallback);
-
-    return function ($value = null) use ($callbacks) {
-        try {
-            $result = array_reduce($callbacks, function ($accumulator, callable $callback) {
-                return $callback($accumulator);
-            }, $value);
-        } catch (Throwable $e) {
-            return $e;
-        }
-
-        return $result;
     };
 }
 
@@ -265,35 +247,4 @@ function getAggregateDefinition(Message $message, array $commandMap): AggregateD
     $cached[$messageName] = new $commandMap[$messageName]['definition']();
 
     return $cached[$messageName];
-}
-
-const curry = 'Prooph\Micro\Kernel\curry';
-
-function curry(callable $f, ...$args)
-{
-    return function (...$partialArgs) use ($f, $args) {
-        return (function ($args) use ($f) {
-            return count($args) < (new \ReflectionFunction($f))->getNumberOfRequiredParameters()
-                ? curry($f, ...$args)
-                : $f(...$args);
-        })(array_merge($args, $partialArgs));
-    };
-}
-
-const o = 'Prooph\Micro\Kernel\o';
-
-function o(callable $g): callable
-{
-    return function (callable $f) use ($g): callable {
-        return function ($x) use ($g, $f) {
-            return $g($f($x));
-        };
-    };
-}
-
-const id = 'Prooph\Micro\Kernel\id';
-
-function id($x)
-{
-    return $x;
 }

@@ -14,6 +14,7 @@ namespace ProophTest\Micro;
 
 use PHPUnit\Framework\TestCase;
 use Prooph\Common\Messaging\Message;
+use Prooph\EventStore\Metadata\FieldType;
 use Prooph\EventStore\Metadata\MetadataEnricher;
 use Prooph\EventStore\Metadata\MetadataMatcher;
 use Prooph\EventStore\Metadata\Operator;
@@ -70,16 +71,19 @@ class AbstractAggregateDefinitionTest extends TestCase
                     'field' => '_aggregate_id',
                     'operator' => Operator::EQUALS(),
                     'value' => 'some_id',
+                    'fieldType' => FieldType::METADATA(),
                 ],
                 [
                     'field' => '_aggregate_type',
                     'operator' => Operator::EQUALS(),
                     'value' => 'foo',
+                    'fieldType' => FieldType::METADATA(),
                 ],
                 [
                     'field' => '_aggregate_version',
                     'operator' => Operator::GREATER_THAN_EQUALS(),
                     'value' => 5,
+                    'fieldType' => FieldType::METADATA(),
                 ],
             ],
             $metadataMatcher->data()
