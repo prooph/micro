@@ -199,7 +199,8 @@ class KernelTest extends TestCase
         $definition->aggregateType()->willReturn('test')->shouldBeCalled();
         $definition->extractAggregateId($message)->willReturn('42')->shouldBeCalled();
 
-        $result = f\loadState($snapshotStore->reveal(), $message, $definition->reveal());
+        $result = f\loadState($snapshotStore->reveal())($definition->reveal())($message);
+
         $this->assertInternalType('array', $result);
         $this->assertEmpty($result);
     }
@@ -225,7 +226,7 @@ class KernelTest extends TestCase
         $definition->aggregateType()->willReturn('test')->shouldBeCalled();
         $definition->extractAggregateId($message)->willReturn('42')->shouldBeCalled();
 
-        $result = f\loadState($snapshotStore, $message, $definition->reveal());
+        $result = f\loadState($snapshotStore)($definition->reveal())($message);
         $this->assertEquals(['foo' => 'bar'], $result);
     }
 

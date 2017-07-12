@@ -69,7 +69,7 @@ function buildCommandDispatcher(
             if (null === $snapshotStoreFactory) {
                 $state = [];
             } else {
-                $state = loadState($snapshotStoreFactory(), $message, $definition);
+                $state = loadState($snapshotStoreFactory())($definition)($message);
             }
 
             /* @var AggregateDefiniton $definition */
@@ -114,15 +114,17 @@ function buildCommandDispatcher(
 
 const loadState = 'Prooph\Micro\Kernel\loadState';
 
-function loadState(SnapshotStore $snapshotStore, Message $message, AggregateDefiniton $definiton): array
+function loadState(SnapshotStore $snapshotStore): callable
 {
-    $aggregate = $snapshotStore->get($definiton->aggregateType(), $definiton->extractAggregateId($message));
+    return f\curry(function (AggregateDefiniton $aggregateDefiniton, Message $message) use ($snapshotStore) {
+        $aggregate = $snapshotStore->get($aggregateDefiniton->aggregateType(), $aggregateDefiniton->extractAggregateId($message));
 
-    if (! $aggregate) {
-        return [];
-    }
+        if (! $aggregate) {
+            return [];
+        }
 
-    return $aggregate->aggregateRoot();
+        return $aggregate->aggregateRoot();
+    });
 }
 
 const loadEvents = 'Prooph\Micro\Kernel\loadEvents';
