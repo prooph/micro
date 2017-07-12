@@ -16,12 +16,10 @@ use EmptyIterator;
 use Iterator;
 use Prooph\Common\Messaging\Message;
 use Prooph\EventStore\EventStore;
-use Prooph\EventStore\Metadata\MetadataMatcher;
 use Prooph\EventStore\Stream;
 use Prooph\EventStore\StreamName;
 use Prooph\EventStore\TransactionalEventStore;
 use Prooph\Micro\AggregateDefiniton;
-use Prooph\Micro\AggregateResult;
 use Prooph\SnapshotStore\SnapshotStore;
 use RuntimeException;
 use Throwable;
@@ -268,3 +266,31 @@ function getAggregateDefinition(Message $message, array $commandMap): AggregateD
 
     return $cached[$messageName];
 }
+
+const curry = 'Prooph\Micro\Kernel\curry';
+
+function curry(callable $f, ...$args) {
+    return function (...$partialArgs) use ($f, $args) {
+        return (function ($args) use ($f) {
+            return count($args) < (new \ReflectionFunction($f))->getNumberOfRequiredParameters()
+                ? curry($f, ...$args)
+                : $f(...$args);
+        })(array_merge($args, $partialArgs));
+    };
+}
+
+const o = 'Prooph\Micro\Kernel\o';
+
+function o(callable $g): callable {
+    return function (callable $f) use ($g): callable {
+        return function ($x) use ($g, $f) {
+            return $g($f($x));
+        };
+    };
+}
+
+const id = 'Prooph\Micro\Kernel\id';
+
+function id($x) {
+    return $x;
+};

@@ -566,4 +566,55 @@ class KernelTest extends TestCase
         $this->assertInstanceOf(\Exception::class, $result);
         $this->assertEquals('Exception there!', $result->getMessage());
     }
+
+    /**
+     * @test
+     */
+    public function it_returns_identity(): void
+    {
+       $result = f\id(4);
+
+       $this->assertSame(4, $result);
+    }
+
+    /**
+     * @test
+     */
+    public function it_composes(): void
+    {
+       $f = function ($x) {
+           return $x + 1;
+       };
+
+       $g = function ($x) {
+           return $x + 2;
+       };
+
+       $h = f\o($g)($f);
+
+       $result = $h(1);
+
+       $this->assertEquals(4, $result);
+    }
+
+    /**
+     * @test
+     */
+    public function it_curries(): void
+    {
+        $map = f\curry('array_map');
+
+        $addOne = function ($x) {
+            return $x + 1;
+        };
+
+        $addOneToList = $map($addOne);
+
+        $result = $addOneToList([1, 2, 3, 4, 5]);
+
+        $this->assertEquals(
+            [2, 3, 4, 5, 6],
+            $result
+        );
+    }
 }
