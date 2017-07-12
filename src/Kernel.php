@@ -102,7 +102,7 @@ function buildCommandDispatcher(
         $persistEvents = function (array $events) use ($eventStoreFactory, $message, $getDefinition): array {
             $definition = $getDefinition($message);
 
-            return persistEvents($events, $eventStoreFactory, $definition, $definition->extractAggregateId($message));
+            return persistEvents($eventStoreFactory())($definition)($definition->extractAggregateId($message))($events);
         };
 
         return f\pipe([
@@ -153,59 +153,52 @@ function loadEvents(
 const persistEvents = 'Prooph\Micro\Kernel\persistEvents';
 
 function persistEvents(
-    array $events,
-    callable $eventStoreFactory,
-    AggregateDefiniton $definition,
-    string $aggregateId
-): array {
-    $eventStore = $eventStoreFactory();
+    EventStore $eventStore
+): callable {
+    return f\curry(function (AggregateDefiniton $definition, string $aggregateId, array $events) use ($eventStore): array {
+        $metadataEnricher = f\map(function (Message $event) use ($events, $definition, $aggregateId) {
+            $aggregateVersion = $definition->extractAggregateVersion($event);
+            $metadataEnricher = $definition->metadataEnricher($aggregateId, $aggregateVersion);
 
-    if (! $eventStore instanceof EventStore) {
-        throw new RuntimeException('$eventStoreFactory did not return an instance of ' . EventStore::class);
-    }
+            if (null !== $metadataEnricher) {
+                $event = $metadataEnricher->enrich($event);
+            }
 
-    $metadataEnricher = function (Message $event) use ($events, $definition, $aggregateId) {
-        $aggregateVersion = $definition->extractAggregateVersion($event);
-        $metadataEnricher = $definition->metadataEnricher($aggregateId, $aggregateVersion);
+            return $event;
+        });
 
-        if (null !== $metadataEnricher) {
-            $event = $metadataEnricher->enrich($event);
+        $events = $metadataEnricher($events);
+
+        $streamName = $definition->streamName();
+
+        if ($definition->hasOneStreamPerAggregate()) {
+            $streamName = new StreamName($streamName->toString() . '-' . $aggregateId); // append aggregate id to stream name
         }
 
-        return $event;
-    };
-
-    $events = array_map($metadataEnricher, $events);
-
-    $streamName = $definition->streamName();
-
-    if ($definition->hasOneStreamPerAggregate()) {
-        $streamName = new StreamName($streamName->toString() . '-' . $aggregateId); // append aggregate id to stream name
-    }
-
-    if ($eventStore instanceof TransactionalEventStore) {
-        $eventStore->beginTransaction();
-    }
-
-    try {
-        if ($eventStore->hasStream($streamName)) {
-            $eventStore->appendTo($streamName, new \ArrayIterator($events));
-        } else {
-            $eventStore->create(new Stream($streamName, new \ArrayIterator($events)));
-        }
-    } catch (\Throwable $e) {
         if ($eventStore instanceof TransactionalEventStore) {
-            $eventStore->rollback();
+            $eventStore->beginTransaction();
         }
 
-        throw $e;
-    }
+        try {
+            if ($eventStore->hasStream($streamName)) {
+                $eventStore->appendTo($streamName, new \ArrayIterator($events));
+            } else {
+                $eventStore->create(new Stream($streamName, new \ArrayIterator($events)));
+            }
+        } catch (\Throwable $e) {
+            if ($eventStore instanceof TransactionalEventStore) {
+                $eventStore->rollback();
+            }
 
-    if ($eventStore instanceof TransactionalEventStore) {
-        $eventStore->commit();
-    }
+            throw $e;
+        }
 
-    return $events;
+        if ($eventStore instanceof TransactionalEventStore) {
+            $eventStore->commit();
+        }
+
+        return $events;
+    });
 }
 
 const getHandler = 'Prooph\Micro\Kernel\getHandler';
