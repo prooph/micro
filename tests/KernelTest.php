@@ -235,47 +235,26 @@ class KernelTest extends TestCase
      */
     public function it_loads_events_when_stream_not_found(): void
     {
-        $factory = function (): EventStore {
-            $eventStore = $this->prophesize(EventStore::class);
-            $eventStore->hasStream(new StreamName('foo'))->willReturn(false)->shouldBeCalled();
+        $eventStore = $this->prophesize(EventStore::class);
+        $eventStore->hasStream(new StreamName('foo'))->willReturn(false)->shouldBeCalled();
 
-            return $eventStore->reveal();
-        };
-
-        $result = f\loadEvents(new SingleStreamTestAggregateDefinition(), 'foo', 1, $factory);
+        $result = f\loadEvents($eventStore->reveal())(new SingleStreamTestAggregateDefinition())('foo')(1);
 
         $this->assertInstanceOf(\EmptyIterator::class, $result);
     }
 
-    /**
-     * @test
-     */
-    public function it_throws_exception_when_loading_events_with_invalid_event_store_factory(): void
-    {
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('$eventStoreFactory did not return an instance of ' . EventStore::class);
-
-        $factory = function (): void {
-        };
-
-        f\loadEvents(new SingleStreamTestAggregateDefinition(), 'foo', 1, $factory);
-    }
 
     /**
      * @test
      */
     public function it_loads_events_when_stream_found(): void
     {
-        $factory = function (): EventStore {
-            $streamName = new StreamName('foo');
-            $eventStore = $this->prophesize(EventStore::class);
-            $eventStore->hasStream($streamName)->willReturn(true)->shouldBeCalled();
-            $eventStore->load($streamName, 1, null, null)->willReturn(new \ArrayIterator())->shouldBeCalled();
+        $streamName = new StreamName('foo');
+        $eventStore = $this->prophesize(EventStore::class);
+        $eventStore->hasStream($streamName)->willReturn(true)->shouldBeCalled();
+        $eventStore->load($streamName, 1, null, null)->willReturn(new \ArrayIterator())->shouldBeCalled();
 
-            return $eventStore->reveal();
-        };
-
-        $result = f\loadEvents(new SingleStreamTestAggregateDefinition(), 'foo', 1, $factory);
+        $result = f\loadEvents($eventStore->reveal())(new SingleStreamTestAggregateDefinition())('foo')(1);
 
         $this->assertInstanceOf(\ArrayIterator::class, $result);
         $this->assertCount(0, $result);
@@ -286,15 +265,11 @@ class KernelTest extends TestCase
      */
     public function it_loads_events_when_stream_found_using_one_stream_per_aggregate(): void
     {
-        $factory = function (): EventStore {
-            $eventStore = $this->prophesize(EventStore::class);
-            $eventStore->hasStream(Argument::type(StreamName::class))->willReturn(true)->shouldBeCalled();
-            $eventStore->load(Argument::type(StreamName::class), 1, null, null)->willReturn(new \ArrayIterator())->shouldBeCalled();
+        $eventStore = $this->prophesize(EventStore::class);
+        $eventStore->hasStream(Argument::type(StreamName::class))->willReturn(true)->shouldBeCalled();
+        $eventStore->load(Argument::type(StreamName::class), 1, null, null)->willReturn(new \ArrayIterator())->shouldBeCalled();
 
-            return $eventStore->reveal();
-        };
-
-        $result = f\loadEvents(new OneStreamPerAggregateTestAggregateDefinition(), 'foo', 1, $factory);
+        $result = f\loadEvents($eventStore->reveal())(new OneStreamPerAggregateTestAggregateDefinition())('foo')(1);
 
         $this->assertInstanceOf(\ArrayIterator::class, $result);
         $this->assertCount(0, $result);
