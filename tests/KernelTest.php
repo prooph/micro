@@ -21,7 +21,7 @@ use Prooph\EventStore\Stream;
 use Prooph\EventStore\StreamName;
 use Prooph\EventStore\TransactionalEventStore;
 use Prooph\Micro\AggregateDefiniton;
-use Prooph\Micro\Kernel as f;
+use Prooph\Micro\Kernel as k;
 use Prooph\SnapshotStore\InMemorySnapshotStore;
 use Prooph\SnapshotStore\Snapshot;
 use Prooph\SnapshotStore\SnapshotStore;
@@ -199,7 +199,7 @@ class KernelTest extends TestCase
         $definition->aggregateType()->willReturn('test')->shouldBeCalled();
         $definition->extractAggregateId($message)->willReturn('42')->shouldBeCalled();
 
-        $result = f\loadState($snapshotStore->reveal())($definition->reveal())($message);
+        $result = k\loadState($snapshotStore->reveal())($definition->reveal())($message);
 
         $this->assertInternalType('array', $result);
         $this->assertEmpty($result);
@@ -226,7 +226,7 @@ class KernelTest extends TestCase
         $definition->aggregateType()->willReturn('test')->shouldBeCalled();
         $definition->extractAggregateId($message)->willReturn('42')->shouldBeCalled();
 
-        $result = f\loadState($snapshotStore)($definition->reveal())($message);
+        $result = k\loadState($snapshotStore)($definition->reveal())($message);
         $this->assertEquals(['foo' => 'bar'], $result);
     }
 
@@ -238,7 +238,7 @@ class KernelTest extends TestCase
         $eventStore = $this->prophesize(EventStore::class);
         $eventStore->hasStream(new StreamName('foo'))->willReturn(false)->shouldBeCalled();
 
-        $result = f\loadEvents($eventStore->reveal())(new SingleStreamTestAggregateDefinition())('foo')(1);
+        $result = k\loadEvents($eventStore->reveal())(new SingleStreamTestAggregateDefinition())('foo')(1);
 
         $this->assertInstanceOf(\EmptyIterator::class, $result);
     }
@@ -254,7 +254,7 @@ class KernelTest extends TestCase
         $eventStore->hasStream($streamName)->willReturn(true)->shouldBeCalled();
         $eventStore->load($streamName, 1, null, null)->willReturn(new \ArrayIterator())->shouldBeCalled();
 
-        $result = f\loadEvents($eventStore->reveal())(new SingleStreamTestAggregateDefinition())('foo')(1);
+        $result = k\loadEvents($eventStore->reveal())(new SingleStreamTestAggregateDefinition())('foo')(1);
 
         $this->assertInstanceOf(\ArrayIterator::class, $result);
         $this->assertCount(0, $result);
@@ -269,7 +269,7 @@ class KernelTest extends TestCase
         $eventStore->hasStream(Argument::type(StreamName::class))->willReturn(true)->shouldBeCalled();
         $eventStore->load(Argument::type(StreamName::class), 1, null, null)->willReturn(new \ArrayIterator())->shouldBeCalled();
 
-        $result = f\loadEvents($eventStore->reveal())(new OneStreamPerAggregateTestAggregateDefinition())('foo')(1);
+        $result = k\loadEvents($eventStore->reveal())(new OneStreamPerAggregateTestAggregateDefinition())('foo')(1);
 
         $this->assertInstanceOf(\ArrayIterator::class, $result);
         $this->assertCount(0, $result);
@@ -294,7 +294,7 @@ class KernelTest extends TestCase
         $aggregateDefinition->streamName()->willReturn(new StreamName('foo'))->shouldBeCalled();
         $aggregateDefinition->hasOneStreamPerAggregate()->willReturn(false)->shouldBeCalled();
 
-        $result = f\persistEvents($eventStore->reveal())($aggregateDefinition->reveal())('some_id')($raisedEvents);
+        $result = k\persistEvents($eventStore->reveal())($aggregateDefinition->reveal())('some_id')($raisedEvents);
 
         $this->assertSame($raisedEvents, $result);
     }
@@ -313,7 +313,7 @@ class KernelTest extends TestCase
         $aggregateDefinition->streamName()->willReturn(new StreamName('foo'))->shouldBeCalled();
         $aggregateDefinition->hasOneStreamPerAggregate()->willReturn(false)->shouldBeCalled();
 
-        $result = f\persistEvents(new InMemoryEventStore())($aggregateDefinition->reveal())('some_id')($raisedEvents);
+        $result = k\persistEvents(new InMemoryEventStore())($aggregateDefinition->reveal())('some_id')($raisedEvents);
 
         $this->assertSame($raisedEvents, $result);
     }
@@ -345,8 +345,8 @@ class KernelTest extends TestCase
         $aggregateDefinition->streamName()->willReturn(new StreamName('foo'))->shouldBeCalled();
         $aggregateDefinition->hasOneStreamPerAggregate()->willReturn(true)->shouldBeCalled();
 
-        f\persistEvents($eventStore)($aggregateDefinition->reveal())('one')($raisedEvents);
-        f\persistEvents($eventStore)($aggregateDefinition->reveal())('one')($raisedEvents);
+        k\persistEvents($eventStore)($aggregateDefinition->reveal())('one')($raisedEvents);
+        k\persistEvents($eventStore)($aggregateDefinition->reveal())('one')($raisedEvents);
     }
 
     /**
@@ -367,7 +367,7 @@ class KernelTest extends TestCase
         $aggregateDefinition->streamName()->willReturn(new StreamName('foo'))->shouldBeCalled();
         $aggregateDefinition->hasOneStreamPerAggregate()->willReturn(true)->shouldBeCalled();
 
-        $result = f\persistEvents($eventStore->reveal())($aggregateDefinition->reveal())('some_id')($raisedEvents);
+        $result = k\persistEvents($eventStore->reveal())($aggregateDefinition->reveal())('some_id')($raisedEvents);
 
         $this->assertSame($raisedEvents, $result);
     }
@@ -401,7 +401,7 @@ class KernelTest extends TestCase
         $aggregateDefinition->streamName()->willReturn(new StreamName('foo'))->shouldBeCalled();
         $aggregateDefinition->hasOneStreamPerAggregate()->willReturn(false)->shouldBeCalled();
 
-        $events = f\persistEvents($eventStore->reveal())($aggregateDefinition->reveal())('some_id')([$message->reveal()]);
+        $events = k\persistEvents($eventStore->reveal())($aggregateDefinition->reveal())('some_id')([$message->reveal()]);
 
         $this->assertSame([$enrichedMessage], $events);
     }
@@ -422,7 +422,7 @@ class KernelTest extends TestCase
             ],
         ];
 
-        $result = f\getHandler($message->reveal(), $commandMap);
+        $result = k\getHandler($message->reveal(), $commandMap);
 
         $this->assertInstanceOf(\Closure::class, $result);
     }
@@ -440,7 +440,7 @@ class KernelTest extends TestCase
         $commandMap = ['foo' => ['handler' => function (): void {
         }]];
 
-        f\getHandler($message->reveal(), $commandMap);
+        k\getHandler($message->reveal(), $commandMap);
     }
 
     /**
@@ -453,11 +453,11 @@ class KernelTest extends TestCase
 
         $commandMap = ['foo' => ['definition' => SingleStreamTestAggregateDefinition::class]];
 
-        $result = f\getAggregateDefinition($message->reveal(), $commandMap);
+        $result = k\getAggregateDefinition($message->reveal(), $commandMap);
 
         $this->assertInstanceOf(SingleStreamTestAggregateDefinition::class, $result);
 
-        $result2 = f\getAggregateDefinition($message->reveal(), $commandMap);
+        $result2 = k\getAggregateDefinition($message->reveal(), $commandMap);
 
         $this->assertSame($result, $result2);
     }
@@ -474,6 +474,6 @@ class KernelTest extends TestCase
 
         $commandMap = [];
 
-        f\getAggregateDefinition($message->reveal(), $commandMap);
+        k\getAggregateDefinition($message->reveal(), $commandMap);
     }
 }
