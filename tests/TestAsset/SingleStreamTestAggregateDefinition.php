@@ -17,9 +17,9 @@ use Prooph\Common\Messaging\Message;
 use Prooph\EventStore\Metadata\MetadataEnricher;
 use Prooph\EventStore\Metadata\MetadataMatcher;
 use Prooph\EventStore\StreamName;
-use Prooph\Micro\AggregateDefiniton;
+use Prooph\Micro\AggregateDefinition;
 
-final class SingleStreamTestAggregateDefinition implements AggregateDefiniton
+final class SingleStreamTestAggregateDefinition implements AggregateDefinition
 {
     public function identifierName(): string
     {

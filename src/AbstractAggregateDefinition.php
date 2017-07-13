@@ -19,7 +19,7 @@ use Prooph\EventStore\Metadata\MetadataMatcher;
 use Prooph\EventStore\Metadata\Operator;
 use RuntimeException;
 
-abstract class AbstractAggregateDefiniton implements AggregateDefiniton
+abstract class AbstractAggregateDefinition implements AggregateDefinition
 {
     public function identifierName(): string
     {

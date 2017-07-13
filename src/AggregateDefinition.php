@@ -18,7 +18,7 @@ use Prooph\EventStore\Metadata\MetadataEnricher;
 use Prooph\EventStore\Metadata\MetadataMatcher;
 use Prooph\EventStore\StreamName;
 
-interface AggregateDefiniton
+interface AggregateDefinition
 {
     public function aggregateType(): string;
 

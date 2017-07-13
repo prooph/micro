@@ -20,7 +20,8 @@ use Prooph\EventStore\Metadata\MetadataEnricher;
 use Prooph\EventStore\Stream;
 use Prooph\EventStore\StreamName;
 use Prooph\EventStore\TransactionalEventStore;
-use Prooph\Micro\AggregateDefiniton;
+use Prooph\Micro\AggregateDefinition;
+use Prooph\Micro\Functional as f;
 use Prooph\Micro\Kernel as k;
 use Prooph\SnapshotStore\InMemorySnapshotStore;
 use Prooph\SnapshotStore\Snapshot;
@@ -45,41 +46,21 @@ class KernelTest extends TestCase
             ],
         ];
 
-        $eventStoreFactory = function (): EventStore {
-            static $eventStore = null;
+        $eventStore = $this->prophesize(EventStore::class);
+        $eventStore->hasStream('foo')->willReturn(true)->shouldBeCalled();
+        $eventStore->load(Argument::type(StreamName::class), 1, null, null)->willReturn(new \ArrayIterator())->shouldBeCalled();
+        $eventStore->appendTo(Argument::type(StreamName::class), Argument::type(\Iterator::class))->shouldBeCalled();
 
-            if (null === $eventStore) {
-                $eventStore = $this->prophesize(EventStore::class);
-                $eventStore->hasStream('foo')->willReturn(true)->shouldBeCalled();
-                $eventStore->load(Argument::type(StreamName::class), 1, null, null)->willReturn(new \ArrayIterator())->shouldBeCalled();
-                $eventStore->appendTo(Argument::type(StreamName::class), Argument::type(\Iterator::class))->shouldBeCalled();
-                $eventStore = $eventStore->reveal();
-            }
-
-            return $eventStore;
-        };
-
-        $snapshotStoreFactory = function (): SnapshotStore {
-            static $snapshotStore = null;
-
-            if (null === $snapshotStore) {
-                $snapshotStore = new InMemorySnapshotStore();
-            }
-
-            return $snapshotStore;
-        };
-
-        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher(
-            $commandMap,
-            $eventStoreFactory,
-            $snapshotStoreFactory
-        );
+        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStore->reveal())(new InMemorySnapshotStore())($commandMap);
 
         $command = $this->prophesize(Message::class);
         $command->messageName()->willReturn('some_command')->shouldBeCalled();
 
-        $events = $dispatch($command->reveal());
-        $this->assertEmpty($events);
+        $attempt = $dispatch($command->reveal());
+
+        if ($attempt instanceof f\Failure) {
+            $this->fail($attempt->reason());
+        }
     }
 
     /**
@@ -96,93 +77,21 @@ class KernelTest extends TestCase
             ],
         ];
 
-        $eventStoreFactory = function (): EventStore {
-            static $eventStore = null;
+        $eventStore = $this->prophesize(EventStore::class);
+        $eventStore->hasStream('foo')->willReturn(true)->shouldBeCalled();
+        $eventStore->load(Argument::type(StreamName::class), 1, null, null)->willReturn(new \ArrayIterator())->shouldNotBeCalled();
+        $eventStore->appendTo(Argument::type(StreamName::class), Argument::type(\Iterator::class))->shouldBeCalled();
 
-            if (null === $eventStore) {
-                $eventStore = $this->prophesize(EventStore::class);
-                $eventStore->hasStream('foo')->willReturn(true)->shouldBeCalled();
-                $eventStore->load(Argument::type(StreamName::class), 1, null, null)->willReturn(new \ArrayIterator())->shouldNotBeCalled();
-                $eventStore->appendTo(Argument::type(StreamName::class), Argument::type(\Iterator::class))->shouldBeCalled();
-                $eventStore = $eventStore->reveal();
-            }
-
-            return $eventStore;
-        };
-
-        $snapshotStoreFactory = function (): SnapshotStore {
-            static $snapshotStore = null;
-
-            if (null === $snapshotStore) {
-                $snapshotStore = new InMemorySnapshotStore();
-            }
-
-            return $snapshotStore;
-        };
-
-        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher(
-            $commandMap,
-            $eventStoreFactory,
-            $snapshotStoreFactory
-        );
+        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStore->reveal())(new InMemorySnapshotStore())($commandMap);
 
         $command = $this->prophesize(Message::class);
         $command->messageName()->willReturn('some_command')->shouldBeCalled();
 
-        $events = $dispatch($command->reveal());
-        $this->assertEmpty($events);
-    }
+        $attempt = $dispatch($command->reveal());
 
-    /**
-     * @test
-     */
-    public function it_builds_command_dispatcher_and_dispatches_but_breaks_when_handler_returns_invalid_result(): void
-    {
-        $commandMap = [
-            'some_command' => [
-                'handler' => function (callable $stateResolver, Message $message): string {
-                    return 'invalid';
-                },
-                'definition' => SingleStreamTestAggregateDefinition::class,
-            ],
-        ];
-
-        $eventStoreFactory = function (): EventStore {
-            static $eventStore = null;
-
-            if (null === $eventStore) {
-                $eventStore = $this->prophesize(EventStore::class);
-                $eventStore->hasStream('foo')->willReturn(true)->shouldBeCalled();
-                $eventStore->load(Argument::type(StreamName::class), 1, null, null)->willReturn(new \ArrayIterator())->shouldBeCalled();
-                $eventStore = $eventStore->reveal();
-            }
-
-            return $eventStore;
-        };
-
-        $snapshotStoreFactory = function (): SnapshotStore {
-            static $snapshotStore = null;
-
-            if (null === $snapshotStore) {
-                $snapshotStore = new InMemorySnapshotStore();
-            }
-
-            return $snapshotStore;
-        };
-
-        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher(
-            $commandMap,
-            $eventStoreFactory,
-            $snapshotStoreFactory
-        );
-
-        $command = $this->prophesize(Message::class);
-        $command->messageName()->willReturn('some_command')->shouldBeCalled();
-
-        $result = $dispatch($command->reveal());
-
-        $this->assertInstanceOf(\RuntimeException::class, $result);
-        $this->assertEquals('The handler did not return an array', $result->getMessage());
+        if ($attempt instanceof f\Failure) {
+            $this->fail($attempt->reason());
+        }
     }
 
     /**
@@ -195,7 +104,7 @@ class KernelTest extends TestCase
         $message = $this->prophesize(Message::class);
         $message = $message->reveal();
 
-        $definition = $this->prophesize(AggregateDefiniton::class);
+        $definition = $this->prophesize(AggregateDefinition::class);
         $definition->aggregateType()->willReturn('test')->shouldBeCalled();
         $definition->extractAggregateId($message)->willReturn('42')->shouldBeCalled();
 
@@ -222,7 +131,7 @@ class KernelTest extends TestCase
         $message = $this->prophesize(Message::class);
         $message = $message->reveal();
 
-        $definition = $this->prophesize(AggregateDefiniton::class);
+        $definition = $this->prophesize(AggregateDefinition::class);
         $definition->aggregateType()->willReturn('test')->shouldBeCalled();
         $definition->extractAggregateId($message)->willReturn('42')->shouldBeCalled();
 
@@ -242,7 +151,6 @@ class KernelTest extends TestCase
 
         $this->assertInstanceOf(\EmptyIterator::class, $result);
     }
-
 
     /**
      * @test
@@ -288,15 +196,17 @@ class KernelTest extends TestCase
         $message = $this->prophesize(Message::class);
         $raisedEvents = [$message->reveal()];
 
-        $aggregateDefinition = $this->prophesize(AggregateDefiniton::class);
+        $aggregateDefinition = $this->prophesize(AggregateDefinition::class);
         $aggregateDefinition->extractAggregateVersion($message)->willReturn(42)->shouldBeCalled();
         $aggregateDefinition->metadataEnricher('some_id', 42)->willReturn(null)->shouldBeCalled();
         $aggregateDefinition->streamName()->willReturn(new StreamName('foo'))->shouldBeCalled();
         $aggregateDefinition->hasOneStreamPerAggregate()->willReturn(false)->shouldBeCalled();
 
-        $result = k\persistEvents($eventStore->reveal())($aggregateDefinition->reveal())('some_id')($raisedEvents);
+        $attempt = k\persistEvents($eventStore->reveal())($aggregateDefinition->reveal())('some_id')($raisedEvents);
 
-        $this->assertSame($raisedEvents, $result);
+        if ($attempt instanceof f\Failure) {
+            $this->fail($attempt->reason());
+        }
     }
 
     /**
@@ -307,15 +217,17 @@ class KernelTest extends TestCase
         $message = $this->prophesize(Message::class);
         $raisedEvents = [$message->reveal()];
 
-        $aggregateDefinition = $this->prophesize(AggregateDefiniton::class);
+        $aggregateDefinition = $this->prophesize(AggregateDefinition::class);
         $aggregateDefinition->extractAggregateVersion($message)->willReturn(42)->shouldBeCalled();
         $aggregateDefinition->metadataEnricher('some_id', 42)->willReturn(null)->shouldBeCalled();
         $aggregateDefinition->streamName()->willReturn(new StreamName('foo'))->shouldBeCalled();
         $aggregateDefinition->hasOneStreamPerAggregate()->willReturn(false)->shouldBeCalled();
 
-        $result = k\persistEvents(new InMemoryEventStore())($aggregateDefinition->reveal())('some_id')($raisedEvents);
+        $attempt = k\persistEvents(new InMemoryEventStore())($aggregateDefinition->reveal())('some_id')($raisedEvents);
 
-        $this->assertSame($raisedEvents, $result);
+        if ($attempt instanceof f\Failure) {
+            $this->fail($attempt->reason());
+        }
     }
 
     /**
@@ -339,7 +251,7 @@ class KernelTest extends TestCase
         $message->metadata()->willReturn([]);
         $raisedEvents = [$message->reveal()];
 
-        $aggregateDefinition = $this->prophesize(AggregateDefiniton::class);
+        $aggregateDefinition = $this->prophesize(AggregateDefinition::class);
         $aggregateDefinition->extractAggregateVersion($message)->willReturn(1)->shouldBeCalled();
         $aggregateDefinition->metadataEnricher('one', 1)->willReturn(null)->shouldBeCalled();
         $aggregateDefinition->streamName()->willReturn(new StreamName('foo'))->shouldBeCalled();
@@ -361,15 +273,17 @@ class KernelTest extends TestCase
         $message = $this->prophesize(Message::class);
         $raisedEvents = [$message->reveal()];
 
-        $aggregateDefinition = $this->prophesize(AggregateDefiniton::class);
+        $aggregateDefinition = $this->prophesize(AggregateDefinition::class);
         $aggregateDefinition->extractAggregateVersion($message)->willReturn(42)->shouldBeCalled();
         $aggregateDefinition->metadataEnricher('some_id', 42)->willReturn(null)->shouldBeCalled();
         $aggregateDefinition->streamName()->willReturn(new StreamName('foo'))->shouldBeCalled();
         $aggregateDefinition->hasOneStreamPerAggregate()->willReturn(true)->shouldBeCalled();
 
-        $result = k\persistEvents($eventStore->reveal())($aggregateDefinition->reveal())('some_id')($raisedEvents);
+        $attempt = k\persistEvents($eventStore->reveal())($aggregateDefinition->reveal())('some_id')($raisedEvents);
 
-        $this->assertSame($raisedEvents, $result);
+        if ($attempt instanceof f\Failure) {
+            $this->fail($attempt->reason());
+        }
     }
 
     /**
@@ -388,7 +302,7 @@ class KernelTest extends TestCase
         $eventStore->hasStream($streamName)->willReturn(false)->shouldBeCalled();
         $eventStore->create(new Stream($streamName, new \ArrayIterator([$enrichedMessage])))->shouldBeCalled();
 
-        $aggregateDefinition = $this->prophesize(AggregateDefiniton::class);
+        $aggregateDefinition = $this->prophesize(AggregateDefinition::class);
         $aggregateDefinition->extractAggregateVersion($message)->willReturn(42)->shouldBeCalled();
         $aggregateDefinition->metadataEnricher('some_id', 42)->willReturn(
             new class() implements MetadataEnricher {
@@ -401,9 +315,11 @@ class KernelTest extends TestCase
         $aggregateDefinition->streamName()->willReturn(new StreamName('foo'))->shouldBeCalled();
         $aggregateDefinition->hasOneStreamPerAggregate()->willReturn(false)->shouldBeCalled();
 
-        $events = k\persistEvents($eventStore->reveal())($aggregateDefinition->reveal())('some_id')([$message->reveal()]);
+        $attempt = k\persistEvents($eventStore->reveal())($aggregateDefinition->reveal())('some_id')([$message->reveal()]);
 
-        $this->assertSame([$enrichedMessage], $events);
+        if ($attempt instanceof f\Failure) {
+            $this->fail($attempt->reason());
+        }
     }
 
     /**
@@ -422,7 +338,7 @@ class KernelTest extends TestCase
             ],
         ];
 
-        $result = k\getHandler($message->reveal(), $commandMap);
+        $result = k\getHandler($commandMap)($message->reveal());
 
         $this->assertInstanceOf(\Closure::class, $result);
     }
@@ -440,26 +356,7 @@ class KernelTest extends TestCase
         $commandMap = ['foo' => ['handler' => function (): void {
         }]];
 
-        k\getHandler($message->reveal(), $commandMap);
-    }
-
-    /**
-     * @test
-     */
-    public function it_gets_aggregate_definition_from_cache(): void
-    {
-        $message = $this->prophesize(Message::class);
-        $message->messageName()->willReturn('foo')->shouldBeCalled();
-
-        $commandMap = ['foo' => ['definition' => SingleStreamTestAggregateDefinition::class]];
-
-        $result = k\getAggregateDefinition($message->reveal(), $commandMap);
-
-        $this->assertInstanceOf(SingleStreamTestAggregateDefinition::class, $result);
-
-        $result2 = k\getAggregateDefinition($message->reveal(), $commandMap);
-
-        $this->assertSame($result, $result2);
+        k\getHandler($commandMap)($message->reveal());
     }
 
     /**
@@ -474,6 +371,6 @@ class KernelTest extends TestCase
 
         $commandMap = [];
 
-        k\getAggregateDefinition($message->reveal(), $commandMap);
+        k\getAggregateDefinition($commandMap)($message->reveal());
     }
 }

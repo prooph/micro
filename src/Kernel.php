@@ -16,10 +16,11 @@ use EmptyIterator;
 use Iterator;
 use Prooph\Common\Messaging\Message;
 use Prooph\EventStore\EventStore;
+use Prooph\EventStore\Exception\ConcurrencyException;
 use Prooph\EventStore\Stream;
 use Prooph\EventStore\StreamName;
 use Prooph\EventStore\TransactionalEventStore;
-use Prooph\Micro\AggregateDefiniton;
+use Prooph\Micro\AggregateDefinition;
 use Prooph\Micro\Functional as f;
 use Prooph\SnapshotStore\SnapshotStore;
 use RuntimeException;
@@ -49,66 +50,63 @@ const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
  * ]
  * $message is expected to be an instance of Prooph\Common\Messaging\Message
  */
-function buildCommandDispatcher(
-    array $commandMap,
-    callable $eventStoreFactory,
-    callable $snapshotStoreFactory = null
-): callable {
-    return function (Message $message) use (
-        $commandMap,
-        $eventStoreFactory,
-        $snapshotStoreFactory
-    ) {
-        $getDefinition = function (Message $message) use ($commandMap): AggregateDefiniton {
-            return getAggregateDefinition($message, $commandMap);
+function buildCommandDispatcher(EventStore $eventStore): callable
+{
+    return function (SnapshotStore $snapshotStore = null) use ($eventStore): callable {
+        return function (array $commandMap) use ($eventStore, $snapshotStore): callable {
+            return function (Message $message) use ($eventStore, $snapshotStore, $commandMap): f\Attempt {
+                /* @var AggregateDefinition $definition */
+                $definition = getAggregateDefinition($commandMap)($message);
+
+                $stateResolver = function () use ($message, $definition, $eventStore, $snapshotStore): array {
+                    if (null === $snapshotStore) {
+                        $state = [];
+                    } else {
+                        $state = loadState($snapshotStore)($definition)($message);
+                    }
+
+                    $aggregateId = $definition->extractAggregateId($message);
+
+                    if (empty($state)) {
+                        $nextVersion = 1;
+                    } else {
+                        $versionKey = $definition->versionName();
+                        $nextVersion = $state[$versionKey] + 1;
+                    }
+
+                    $events = loadEvents($eventStore)($definition)($aggregateId)($nextVersion);
+
+                    return $definition->reconstituteState($state, $events);
+                };
+
+                $handleCommand = function (Message $message) use ($stateResolver, $commandMap): array {
+                    $handler = getHandler($commandMap)($message);
+
+                    $events = $handler($stateResolver, $message);
+
+                    if (! is_array($events)) {
+                        throw new RuntimeException('The handler did not return an array');
+                    }
+
+                    return $events;
+                };
+
+                $persistEvents = function (array $events) use ($eventStore, $definition, $message): void {
+                    persistEvents($eventStore)($definition)($definition->extractAggregateId($message))($events);
+                };
+
+                try {
+                    f\pipe([
+                        $handleCommand,
+                        $persistEvents,
+                    ])($message);
+                } catch (ConcurrencyException $e) {
+                    return f\Attempt::failure('Concurrency exception');
+                }
+
+                return f\Attempt::success();
+            };
         };
-
-        $stateResolver = function () use ($message, $getDefinition, $eventStoreFactory, $snapshotStoreFactory) {
-            $definition = $getDefinition($message);
-
-            if (null === $snapshotStoreFactory) {
-                $state = [];
-            } else {
-                $state = loadState($snapshotStoreFactory())($definition)($message);
-            }
-
-            /* @var AggregateDefiniton $definition */
-            $aggregateId = $definition->extractAggregateId($message);
-
-            if (empty($state)) {
-                $nextVersion = 1;
-            } else {
-                $versionKey = $definition->versionName();
-                $nextVersion = $state[$versionKey] + 1;
-            }
-
-            $events = loadEvents($eventStoreFactory())($definition)($aggregateId)($nextVersion);
-
-            return $definition->reconstituteState($state, $events);
-        };
-
-        $handleCommand = function (Message $message) use ($stateResolver, $commandMap): array {
-            $handler = getHandler($message, $commandMap);
-
-            $events = $handler($stateResolver, $message);
-
-            if (! is_array($events)) {
-                throw new RuntimeException('The handler did not return an array');
-            }
-
-            return $events;
-        };
-
-        $persistEvents = function (array $events) use ($eventStoreFactory, $message, $getDefinition): array {
-            $definition = $getDefinition($message);
-
-            return persistEvents($eventStoreFactory())($definition)($definition->extractAggregateId($message))($events);
-        };
-
-        return f\pipe([
-            $handleCommand,
-            $persistEvents
-        ])($message);
     };
 }
 
@@ -116,15 +114,21 @@ const loadState = 'Prooph\Micro\Kernel\loadState';
 
 function loadState(SnapshotStore $snapshotStore): callable
 {
-    return f\curry(function (AggregateDefiniton $definiton, Message $message) use ($snapshotStore): array {
-        $aggregate = $snapshotStore->get($definiton->aggregateType(), $definiton->extractAggregateId($message));
+    return function (AggregateDefinition $definition) use ($snapshotStore) {
+        return function (Message $message) use ($snapshotStore, $definition): array {
+            $aggregate = $snapshotStore->get($definition->aggregateType(), $definition->extractAggregateId($message));
 
-        if (! $aggregate) {
-            return [];
-        }
+            if (! $aggregate) {
+                return [];
+            }
 
-        return $aggregate->aggregateRoot();
-    });
+            return $aggregate->aggregateRoot();
+        };
+    };
+
+//    return f\curry(function (AggregateDefinition $definiton, Message $message) use ($snapshotStore): array {
+//        ...
+//    });
 }
 
 const loadEvents = 'Prooph\Micro\Kernel\loadEvents';
@@ -132,22 +136,30 @@ const loadEvents = 'Prooph\Micro\Kernel\loadEvents';
 function loadEvents(
     EventStore $eventStore
 ): callable {
-    return f\curry(function (AggregateDefiniton $definition, string $aggregateId, int $nextVersion) use ($eventStore): Iterator {
-        $streamName = $definition->streamName();
-        $metadataMatcher = $definition->metadataMatcher($aggregateId, $nextVersion);
+    return function (AggregateDefinition $definition) use ($eventStore): callable {
+        return function (string $aggregateId) use ($eventStore, $definition): callable {
+            return function (int $nextVersion) use ($eventStore, $definition, $aggregateId): Iterator {
+                $streamName = $definition->streamName();
+                $metadataMatcher = $definition->metadataMatcher($aggregateId, $nextVersion);
 
-        if (! $eventStore->hasStream($streamName)) {
-            return new EmptyIterator();
-        }
+                if (! $eventStore->hasStream($streamName)) {
+                    return new EmptyIterator();
+                }
 
-        if ($definition->hasOneStreamPerAggregate()) {
-            $streamName = new StreamName($streamName->toString() . '-' . $aggregateId); // append aggregate id to stream name
-        } else {
-            $nextVersion = 1; // we don't know the event position, the metadata matcher will help, we start at 1
-        }
+                if ($definition->hasOneStreamPerAggregate()) {
+                    $streamName = new StreamName($streamName->toString() . '-' . $aggregateId); // append aggregate id to stream name
+                } else {
+                    $nextVersion = 1; // we don't know the event position, the metadata matcher will help, we start at 1
+                }
 
-        return $eventStore->load($streamName, $nextVersion, null, $metadataMatcher);
-    });
+                return $eventStore->load($streamName, $nextVersion, null, $metadataMatcher);
+            };
+        };
+    };
+
+//    return f\curry(function (AggregateDefinition $definition, string $aggregateId, int $nextVersion) use ($eventStore): Iterator {
+//         ...
+//    });
 }
 
 const persistEvents = 'Prooph\Micro\Kernel\persistEvents';
@@ -155,83 +167,87 @@ const persistEvents = 'Prooph\Micro\Kernel\persistEvents';
 function persistEvents(
     EventStore $eventStore
 ): callable {
-    return f\curry(function (AggregateDefiniton $definition, string $aggregateId, array $events) use ($eventStore): array {
-        $metadataEnricher = f\map(function (Message $event) use ($events, $definition, $aggregateId) {
-            $aggregateVersion = $definition->extractAggregateVersion($event);
-            $metadataEnricher = $definition->metadataEnricher($aggregateId, $aggregateVersion);
+    return function (AggregateDefinition $definition) use ($eventStore): callable {
+        return function (string $aggregateId) use ($eventStore, $definition): callable {
+            return function (array $events) use ($eventStore, $definition, $aggregateId): void {
+                $metadataEnricher = f\map(function (Message $event) use ($events, $definition, $aggregateId) {
+                    $aggregateVersion = $definition->extractAggregateVersion($event);
+                    $metadataEnricher = $definition->metadataEnricher($aggregateId, $aggregateVersion);
 
-            if (null !== $metadataEnricher) {
-                $event = $metadataEnricher->enrich($event);
-            }
+                    if (null !== $metadataEnricher) {
+                        $event = $metadataEnricher->enrich($event);
+                    }
 
-            return $event;
-        });
+                    return $event;
+                });
 
-        $events = $metadataEnricher($events);
+                $events = $metadataEnricher($events);
 
-        $streamName = $definition->streamName();
+                $streamName = $definition->streamName();
 
-        if ($definition->hasOneStreamPerAggregate()) {
-            $streamName = new StreamName($streamName->toString() . '-' . $aggregateId); // append aggregate id to stream name
-        }
+                if ($definition->hasOneStreamPerAggregate()) {
+                    $streamName = new StreamName($streamName->toString() . '-' . $aggregateId); // append aggregate id to stream name
+                }
 
-        if ($eventStore instanceof TransactionalEventStore) {
-            $eventStore->beginTransaction();
-        }
+                if ($eventStore instanceof TransactionalEventStore) {
+                    $eventStore->beginTransaction();
+                }
 
-        try {
-            if ($eventStore->hasStream($streamName)) {
-                $eventStore->appendTo($streamName, new \ArrayIterator($events));
-            } else {
-                $eventStore->create(new Stream($streamName, new \ArrayIterator($events)));
-            }
-        } catch (\Throwable $e) {
-            if ($eventStore instanceof TransactionalEventStore) {
-                $eventStore->rollback();
-            }
+                try {
+                    if ($eventStore->hasStream($streamName)) {
+                        $eventStore->appendTo($streamName, new \ArrayIterator($events));
+                    } else {
+                        $eventStore->create(new Stream($streamName, new \ArrayIterator($events)));
+                    }
+                } catch (\Throwable $e) {
+                    if ($eventStore instanceof TransactionalEventStore) {
+                        $eventStore->rollback();
+                    }
 
-            throw $e;
-        }
+                    throw $e;
+                }
 
-        if ($eventStore instanceof TransactionalEventStore) {
-            $eventStore->commit();
-        }
+                if ($eventStore instanceof TransactionalEventStore) {
+                    $eventStore->commit();
+                }
+            };
+        };
+    };
 
-        return $events;
-    });
+//    return f\curry(function (AggregateDefinition $definition, string $aggregateId, array $events) use ($eventStore): void {
+//       ...
+//    });
 }
 
 const getHandler = 'Prooph\Micro\Kernel\getHandler';
 
-function getHandler(Message $message, array $commandMap): callable
+function getHandler(array $c): callable
 {
-    if (! array_key_exists($message->messageName(), $commandMap)) {
-        throw new RuntimeException(sprintf(
-            'Unknown message "%s". Message name not mapped to an aggregate.',
-            $message->messageName()
-        ));
-    }
+    return function (Message $m) use ($c) {
+        $n = $m->messageName();
 
-    return $commandMap[$message->messageName()]['handler'];
+        if (! array_key_exists($n, $c)) {
+            throw new RuntimeException(sprintf(
+                'Unknown message "%s". Message name not mapped to an aggregate.',
+                $n
+            ));
+        }
+
+        return $c[$n]['handler'];
+    };
 }
 
 const getAggregateDefinition = 'Prooph\Micro\Kernel\getAggregateDefinition';
 
-function getAggregateDefinition(Message $message, array $commandMap): AggregateDefiniton
+function getAggregateDefinition(array $c): callable
 {
-    static $cached = [];
+    return function (Message $m) use ($c): AggregateDefinition {
+        $n = $m->messageName();
 
-    $messageName = $message->messageName();
+        if (! isset($c[$m->messageName()])) {
+            throw new RuntimeException(sprintf('Unknown message %s. Message name not mapped to an aggregate.', $n));
+        }
 
-    if (isset($cached[$messageName])) {
-        return $cached[$messageName];
-    }
-
-    if (! isset($commandMap[$messageName])) {
-        throw new RuntimeException(sprintf('Unknown message %s. Message name not mapped to an aggregate.', $message->messageName()));
-    }
-
-    $cached[$messageName] = new $commandMap[$messageName]['definition']();
-
-    return $cached[$messageName];
+        return new $c[$n]['definition']();
+    };
 }

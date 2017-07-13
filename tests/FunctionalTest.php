@@ -30,19 +30,6 @@ class FunctionalTest extends TestCase
     /**
      * @test
      */
-    public function it_handles_exceptions_in_pipe(): void
-    {
-        $result = f\pipe([function () {
-            throw new \Exception('Exception there!');
-        }, 'ucfirst'])('aBC');
-
-        $this->assertInstanceOf(\Exception::class, $result);
-        $this->assertSame('Exception there!', $result->getMessage());
-    }
-
-    /**
-     * @test
-     */
     public function it_pipes_in_right_order(): void
     {
         $result = f\pipe(['strtolower', 'strtoupper'])('aBc');
@@ -58,19 +45,6 @@ class FunctionalTest extends TestCase
         $result = f\compose(['ucfirst', 'strtolower'])('aBC');
 
         $this->assertSame('Abc', $result);
-    }
-
-    /**
-     * @test
-     */
-    public function it_handles_exceptions_in_compose(): void
-    {
-        $result = f\compose([function () {
-            throw new \Exception('Exception there!');
-        }, 'ucfirst'])('aBC');
-
-        $this->assertInstanceOf(\Exception::class, $result);
-        $this->assertSame('Exception there!', $result->getMessage());
     }
 
     /**
@@ -200,12 +174,17 @@ class FunctionalTest extends TestCase
      */
     public function it_Y_cominates_using_factorial_example(): void
     {
+        $factorialOldSchool = function (int $n) use (&$factorial) {
+            return ($n <= 1) ? 1 : $n * $factorial($n - 1);
+        };
+
         $factorial = f\Y(function (callable $fact) {
             return function (int $n) use ($fact) {
                 return ($n <= 1) ? 1 : $n * $fact($n - 1);
             };
         });
 
+        $this->assertSame(720, $factorialOldSchool(6));
         $this->assertSame(720, $factorial(6));
     }
 

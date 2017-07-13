@@ -19,7 +19,7 @@ use Prooph\EventStore\Metadata\MetadataEnricher;
 use Prooph\EventStore\Metadata\MetadataMatcher;
 use Prooph\EventStore\Metadata\Operator;
 use Prooph\EventStore\StreamName;
-use Prooph\Micro\AbstractAggregateDefiniton;
+use Prooph\Micro\AbstractAggregateDefinition;
 
 class AbstractAggregateDefinitionTest extends TestCase
 {
@@ -125,9 +125,9 @@ class AbstractAggregateDefinitionTest extends TestCase
         $this->assertEquals(1, $state['count']);
     }
 
-    public function createDefinition(): AbstractAggregateDefiniton
+    public function createDefinition(): AbstractAggregateDefinition
     {
-        return new class() extends AbstractAggregateDefiniton {
+        return new class() extends AbstractAggregateDefinition {
             public function streamName(): StreamName
             {
                 return new StreamName('foo');

@@ -16,9 +16,7 @@ use Prooph\Common\Messaging\Message;
 use Prooph\Micro\Kernel;
 use Prooph\MicroExample\Infrastructure\UserAggregateDefinition;
 use Prooph\MicroExample\Model\Command\ChangeUserName;
-use Prooph\MicroExample\Model\Command\InvalidCommand;
 use Prooph\MicroExample\Model\Command\RegisterUser;
-use Prooph\MicroExample\Model\Command\UnknownCommand;
 use Prooph\MicroExample\Model\User;
 
 $start = microtime(true);
@@ -43,35 +41,17 @@ $commandMap = [
     ],
 ];
 
-$dispatch = Kernel\buildCommandDispatcher(
-    $commandMap,
-    $factories['eventStore'],
-    $factories['snapshotStore']
-);
+$dispatch = Kernel\buildCommandDispatcher($factories['eventStore']())($factories['snapshotStore']())($commandMap);
 
 $command = new RegisterUser(['id' => '1', 'name' => 'Alex', 'email' => 'member@getprooph.org']);
 
-$events = $dispatch($command);
+$dispatch($command);
 
-echo "User was registered, emitted event payload: \n";
-echo json_encode($events[0]->payload()) . "\n\n";
+echo "User was registered\n";
 
-$events = $dispatch(new ChangeUserName(['id' => '1', 'name' => 'Sascha']));
+$dispatch(new ChangeUserName(['id' => '1', 'name' => 'Sascha']));
 
-echo "Username changed, emitted event payload: \n";
-echo json_encode($events[0]->payload()) . "\n\n";
-
-// should return a TypeError
-$throwable = $dispatch(new InvalidCommand());
-
-echo get_class($throwable) . "\n";
-echo $throwable->getMessage() . "\n\n";
-
-$throwable = $dispatch(new UnknownCommand());
-
-// should return a RuntimeException
-echo get_class($throwable) . "\n";
-echo $throwable->getMessage() . "\n\n";
+echo "Username changed\n";
 
 $time = microtime(true) - $start;
 
