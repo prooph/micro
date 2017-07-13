@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 use Prooph\EventStore\EventStore;
 use Prooph\EventStore\InMemoryEventStore;
+use Prooph\EventStore\Projection\InMemoryProjectionManager;
 use Prooph\MicroExample\Infrastructure\InMemoryEmailGuard;
 use Prooph\MicroExample\Model\UniqueEmailGuard;
 use Prooph\SnapshotStore\InMemorySnapshotStore;
@@ -46,5 +47,15 @@ $factories = [
         return $emailGuard;
     },
 ];
+
+$factories['projectionManager'] = function() use (&$factories): InMemoryProjectionManager {
+    static $manager = null;
+
+    if (null === $manager) {
+        $manager = new InMemoryProjectionManager($factories['eventStore']());
+    }
+
+    return $manager;
+};
 
 return $factories;

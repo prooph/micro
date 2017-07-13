@@ -13,7 +13,7 @@ declare(strict_types=1);
 namespace Prooph\MicroExample\Script;
 
 use Prooph\Common\Messaging\Message;
-use Prooph\EventStore\EventStore;
+use Prooph\EventStore\Projection\ProjectionManager;
 use Prooph\Micro\SnapshotReadModel;
 use Prooph\MicroExample\Infrastructure\UserAggregateDefinition;
 
@@ -24,16 +24,15 @@ require 'Model/User.php';
 //We could also use a container here, if dependencies grow
 $factories = include 'Infrastructure/factories.php';
 
-$eventStore = $factories['eventStore']();
-
-/* @var EventStore $eventStore */
+/* @var ProjectionManager $projectionManager */
+$projectionManager = $factories['projectionManager']();
 
 $readModel = new SnapshotReadModel(
     $factories['snapshotStore'](),
     new UserAggregateDefinition()
 );
 
-$projection = $eventStore->createReadModelProjection(
+$projection = $projectionManager->createReadModelProjection(
     'user_snapshots',
     $readModel
 );

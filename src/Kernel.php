@@ -31,10 +31,9 @@ const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
  * builds a dispatcher to return a function that receives a messages and return the state
  *
  * usage:
- * $dispatch = buildDispatcher($commandMap, $eventStoreFactory, $snapshotStoreFactory);
- * $state = $dispatch($message);
+ * $dispatch = buildDispatcher($eventStore)($snapshotStore)($commandMap);
+ * $attempt = $dispatch($message);
  *
- * $producerFactory is expected to be a callback that returns an instance of Prooph\ServiceBus\Async\MessageProducer.
  * $commandMap is expected to be an array like this:
  * [
  *     RegisterUser::class => [
@@ -108,6 +107,10 @@ function buildCommandDispatcher(EventStore $eventStore): callable
             };
         };
     };
+
+//    return f\curry(SnapshtoStore $snapshotStore = null, array $commandMap, Message $message): f\Attempt {
+//        ...
+//
 }
 
 const loadState = 'Prooph\Micro\Kernel\loadState';
