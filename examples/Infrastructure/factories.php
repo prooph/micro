@@ -48,7 +48,7 @@ $factories = [
     },
 ];
 
-$factories['projectionManager'] = function() use (&$factories): InMemoryProjectionManager {
+$factories['projectionManager'] = function () use (&$factories): InMemoryProjectionManager {
     static $manager = null;
 
     if (null === $manager) {
