@@ -24,7 +24,8 @@
     "require": {
         "prooph/event-store": "^7.2",
         "prooph/pdo-event-store": "^1.4.1",
-        "prooph/snapshot-store": "^1.2"
+        "prooph/snapshot-store": "^1.2",
+        "phunkie/phunkie": "^0.1"
     },
     "require-dev": {
         "phpunit/phpunit": "^6.0",
@@ -42,7 +43,6 @@
             "Prooph\\Micro\\": "src/"
         },
         "files": [
-            "src/Functional.php",
             "src/Kernel.php"
         ]
     },

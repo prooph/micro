@@ -12,8 +12,12 @@ declare(strict_types=1);
 
 namespace Prooph\Micro\Kernel;
 
-use EmptyIterator;
 use Iterator;
+use Phunkie\Types\Function1;
+use Phunkie\Types\ImmList;
+use Phunkie\Validation\Failure;
+use Phunkie\Validation\Success;
+use Phunkie\Validation\Validation;
 use Prooph\Common\Messaging\Message;
 use Prooph\EventStore\EventStore;
 use Prooph\EventStore\Exception\ConcurrencyException;
@@ -21,11 +25,10 @@ use Prooph\EventStore\Stream;
 use Prooph\EventStore\StreamName;
 use Prooph\EventStore\TransactionalEventStore;
 use Prooph\Micro\AggregateDefinition;
-use Prooph\Micro\Functional as f;
 use Prooph\SnapshotStore\SnapshotStore;
 use RuntimeException;
 
-const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
+const buildCommandDispatcher = '\\Prooph\\Micro\\Kernel\\buildCommandDispatcher';
 
 /**
  * builds a dispatcher to return a function that receives a messages and return the state
@@ -53,18 +56,18 @@ function buildCommandDispatcher(EventStore $eventStore): callable
 {
     return function (SnapshotStore $snapshotStore = null) use ($eventStore): callable {
         return function (array $commandMap) use ($eventStore, $snapshotStore): callable {
-            return function (Message $message) use ($eventStore, $snapshotStore, $commandMap): f\Attempt {
+            return function (Message $message) use ($eventStore, $snapshotStore, $commandMap): Validation {
                 /* @var AggregateDefinition $definition */
                 $definition = getAggregateDefinition($commandMap)($message);
 
-                $stateResolver = function () use ($message, $definition, $eventStore, $snapshotStore): array {
+                $aggregateId = $definition->extractAggregateId($message);
+
+                $stateResolver = function () use ($message, $definition, $eventStore, $snapshotStore, $aggregateId): array {
                     if (null === $snapshotStore) {
                         $state = [];
                     } else {
                         $state = loadState($snapshotStore)($definition)($message);
                     }
-
-                    $aggregateId = $definition->extractAggregateId($message);
 
                     if (empty($state)) {
                         $nextVersion = 1;
@@ -75,10 +78,10 @@ function buildCommandDispatcher(EventStore $eventStore): callable
 
                     $events = loadEvents($eventStore)($definition)($aggregateId)($nextVersion);
 
-                    return $definition->reconstituteState($state, $events);
+                    return $definition->reconstituteState($state, $events->iterator());
                 };
 
-                $handleCommand = function (Message $message) use ($stateResolver, $commandMap): array {
+                $handleCommand = function (Message $message) use ($stateResolver, $commandMap): ImmList {
                     $handler = getHandler($commandMap)($message);
 
                     $events = $handler($stateResolver, $message);
@@ -87,33 +90,27 @@ function buildCommandDispatcher(EventStore $eventStore): callable
                         throw new RuntimeException('The handler did not return an array');
                     }
 
-                    return $events;
+                    return ImmList(...$events);
                 };
 
-                $persistEvents = function (array $events) use ($eventStore, $definition, $message): void {
-                    persistEvents($eventStore)($definition)($definition->extractAggregateId($message))($events);
+                $enrichEvents = function (ImmList $events) use ($definition, $aggregateId): ImmList {
+                    return enrichEvents($definition)($aggregateId)($events);
                 };
 
-                try {
-                    f\pipe([
-                        $handleCommand,
-                        $persistEvents,
-                    ])($message);
-                } catch (ConcurrencyException $e) {
-                    return f\Attempt::failure('Concurrency exception');
-                }
+                $persistEvents = function (ImmList $events) use ($eventStore, $definition, $message): Validation {
+                    return persistEvents($eventStore)($definition)($definition->extractAggregateId($message))($events);
+                };
 
-                return f\Attempt::success();
+                return Function1($handleCommand)
+                    ->andThen($enrichEvents)
+                    ->andThen($persistEvents)
+                    ->run($message);
             };
         };
     };
-
-//    return f\curry(SnapshtoStore $snapshotStore = null, array $commandMap, Message $message): f\Attempt {
-//        ...
-//
 }
 
-const loadState = 'Prooph\Micro\Kernel\loadState';
+const loadState = '\\Prooph\\Micro\\Kernel\\loadState';
 
 function loadState(SnapshotStore $snapshotStore): callable
 {
@@ -128,25 +125,21 @@ function loadState(SnapshotStore $snapshotStore): callable
             return $aggregate->aggregateRoot();
         };
     };
-
-//    return f\curry(function (AggregateDefinition $definiton, Message $message) use ($snapshotStore): array {
-//        ...
-//    });
 }
 
-const loadEvents = 'Prooph\Micro\Kernel\loadEvents';
+const loadEvents = '\\Prooph\\Micro\\Kernel\\loadEvents';
 
 function loadEvents(
     EventStore $eventStore
 ): callable {
     return function (AggregateDefinition $definition) use ($eventStore): callable {
         return function (string $aggregateId) use ($eventStore, $definition): callable {
-            return function (int $nextVersion) use ($eventStore, $definition, $aggregateId): Iterator {
+            return function (int $nextVersion) use ($eventStore, $definition, $aggregateId): ImmList {
                 $streamName = $definition->streamName();
                 $metadataMatcher = $definition->metadataMatcher($aggregateId, $nextVersion);
 
                 if (! $eventStore->hasStream($streamName)) {
-                    return new EmptyIterator();
+                    return Nil();
                 }
 
                 if ($definition->hasOneStreamPerAggregate()) {
@@ -155,37 +148,40 @@ function loadEvents(
                     $nextVersion = 1; // we don't know the event position, the metadata matcher will help, we start at 1
                 }
 
-                return $eventStore->load($streamName, $nextVersion, null, $metadataMatcher);
+                return ImmList(...$eventStore->load($streamName, $nextVersion, null, $metadataMatcher));
             };
         };
     };
-
-//    return f\curry(function (AggregateDefinition $definition, string $aggregateId, int $nextVersion) use ($eventStore): Iterator {
-//         ...
-//    });
 }
 
-const persistEvents = 'Prooph\Micro\Kernel\persistEvents';
+const enrichEvents = '\\Prooph\\Micro\\Kernel\\enrichEvents';
+
+function enrichEvents(AggregateDefinition $definition): callable
+{
+    return function (string $aggregateId) use ($definition): callable {
+        return function (ImmList $events) use ($definition, $aggregateId) {
+            return $events->map(function ($event) use ($definition, $aggregateId): Message {
+                $aggregateVersion = $definition->extractAggregateVersion($event);
+                $metadataEnricher = $definition->metadataEnricher($aggregateId, $aggregateVersion);
+
+                if (null !== $metadataEnricher) {
+                    $event = $metadataEnricher->enrich($event);
+                }
+
+                return $event;
+            });
+        };
+    };
+}
+
+const persistEvents = '\\Prooph\\Micro\\Kernel\\persistEvents';
 
 function persistEvents(
     EventStore $eventStore
 ): callable {
     return function (AggregateDefinition $definition) use ($eventStore): callable {
         return function (string $aggregateId) use ($eventStore, $definition): callable {
-            return function (array $events) use ($eventStore, $definition, $aggregateId): void {
-                $metadataEnricher = f\map(function (Message $event) use ($events, $definition, $aggregateId) {
-                    $aggregateVersion = $definition->extractAggregateVersion($event);
-                    $metadataEnricher = $definition->metadataEnricher($aggregateId, $aggregateVersion);
-
-                    if (null !== $metadataEnricher) {
-                        $event = $metadataEnricher->enrich($event);
-                    }
-
-                    return $event;
-                });
-
-                $events = $metadataEnricher($events);
-
+            return function (ImmList $events) use ($eventStore, $definition, $aggregateId): Validation {
                 $streamName = $definition->streamName();
 
                 if ($definition->hasOneStreamPerAggregate()) {
@@ -198,13 +194,17 @@ function persistEvents(
 
                 try {
                     if ($eventStore->hasStream($streamName)) {
-                        $eventStore->appendTo($streamName, new \ArrayIterator($events));
+                        $eventStore->appendTo($streamName, $events->iterator());
                     } else {
-                        $eventStore->create(new Stream($streamName, new \ArrayIterator($events)));
+                        $eventStore->create(new Stream($streamName, $events->iterator()));
                     }
                 } catch (\Throwable $e) {
                     if ($eventStore instanceof TransactionalEventStore) {
                         $eventStore->rollback();
+                    }
+
+                    if ($e instanceof ConcurrencyException) {
+                        return Failure($e);
                     }
 
                     throw $e;
@@ -213,16 +213,14 @@ function persistEvents(
                 if ($eventStore instanceof TransactionalEventStore) {
                     $eventStore->commit();
                 }
+
+                return Success(null);
             };
         };
     };
-
-//    return f\curry(function (AggregateDefinition $definition, string $aggregateId, array $events) use ($eventStore): void {
-//       ...
-//    });
 }
 
-const getHandler = 'Prooph\Micro\Kernel\getHandler';
+const getHandler = '\\Prooph\\Micro\\Kernel\\getHandler';
 
 function getHandler(array $c): callable
 {
@@ -240,7 +238,7 @@ function getHandler(array $c): callable
     };
 }
 
-const getAggregateDefinition = 'Prooph\Micro\Kernel\getAggregateDefinition';
+const getAggregateDefinition = '\\Prooph\\Micro\\Kernel\\getAggregateDefinition';
 
 function getAggregateDefinition(array $c): callable
 {
