@@ -12,11 +12,14 @@ declare(strict_types=1);
 
 namespace Prooph\MicroExample\Script;
 
+use Phunkie\Validation\Validation;
 use Prooph\Common\Messaging\Message;
 use Prooph\Micro\Kernel;
 use Prooph\MicroExample\Infrastructure\UserAggregateDefinition;
 use Prooph\MicroExample\Model\Command\ChangeUserName;
+use Prooph\MicroExample\Model\Command\InvalidCommand;
 use Prooph\MicroExample\Model\Command\RegisterUser;
+use Prooph\MicroExample\Model\Command\UnknownCommand;
 use Prooph\MicroExample\Model\User;
 
 $start = microtime(true);
@@ -41,17 +44,24 @@ $commandMap = [
     ],
 ];
 
-$dispatch = Kernel\buildCommandDispatcher($factories['eventStore']())($factories['snapshotStore']())($commandMap);
+$dispatch = Kernel\buildCommandDispatcher($factories['eventStore'](), $commandMap, $factories['snapshotStore']());
 
-$command = new RegisterUser(['id' => '1', 'name' => 'Alex', 'email' => 'member@getprooph.org']);
+/* @var Validation $result */
+$result = $dispatch(new RegisterUser(['id' => '1', 'name' => 'Alex', 'email' => 'member@getprooph.org']));
+echo $result->show() . PHP_EOL;
+echo json_encode($result->getOrElse('')->head()->payload()) . PHP_EOL . PHP_EOL;
 
-$dispatch($command);
+$result = $dispatch(new ChangeUserName(['id' => '1', 'name' => 'Sascha']));
+echo $result->show() . PHP_EOL;
+echo json_encode($result->getOrElse('')->head()->payload()) . PHP_EOL . PHP_EOL;
 
-echo "User was registered\n";
+// a TypeError
+$result = $dispatch(new InvalidCommand());
+echo $result->show() . PHP_EOL . PHP_EOL;
 
-$dispatch(new ChangeUserName(['id' => '1', 'name' => 'Sascha']));
-
-echo "Username changed\n";
+// unknown command
+$result = $dispatch(new UnknownCommand());
+echo $result->show() . PHP_EOL . PHP_EOL;
 
 $time = microtime(true) - $start;
 

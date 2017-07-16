@@ -38,7 +38,7 @@ interface AggregateDefinition
 
     public function streamName(): StreamName;
 
-    public function metadataEnricher(string $aggregateId, int $aggregateVersion): ?MetadataEnricher;
+    public function metadataEnricher(string $aggregateId, int $aggregateVersion, Message $message = null): ?MetadataEnricher;
 
     public function metadataMatcher(string $aggregateId, int $aggregateVersion): ?MetadataMatcher;
 

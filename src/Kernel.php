@@ -12,15 +12,13 @@ declare(strict_types=1);
 
 namespace Prooph\Micro\Kernel;
 
+use EmptyIterator;
 use Iterator;
-use Phunkie\Types\Function1;
 use Phunkie\Types\ImmList;
-use Phunkie\Validation\Failure;
-use Phunkie\Validation\Success;
+use Phunkie\Types\Kind;
 use Phunkie\Validation\Validation;
 use Prooph\Common\Messaging\Message;
 use Prooph\EventStore\EventStore;
-use Prooph\EventStore\Exception\ConcurrencyException;
 use Prooph\EventStore\Stream;
 use Prooph\EventStore\StreamName;
 use Prooph\EventStore\TransactionalEventStore;
@@ -29,12 +27,11 @@ use Prooph\SnapshotStore\SnapshotStore;
 use RuntimeException;
 
 const buildCommandDispatcher = '\\Prooph\\Micro\\Kernel\\buildCommandDispatcher';
-
 /**
- * builds a dispatcher to return a function that receives a messages and return the state
+ * builds a dispatcher and returns a function that receives a messages and returns Success | Failure
  *
  * usage:
- * $dispatch = buildDispatcher($eventStore)($snapshotStore)($commandMap);
+ * $dispatch = buildDispatcher($eventStore, $commandMap, $snapshotStore, $publisher);
  * $attempt = $dispatch($message);
  *
  * $commandMap is expected to be an array like this:
@@ -52,203 +49,197 @@ const buildCommandDispatcher = '\\Prooph\\Micro\\Kernel\\buildCommandDispatcher'
  * ]
  * $message is expected to be an instance of Prooph\Common\Messaging\Message
  */
-function buildCommandDispatcher(EventStore $eventStore): callable
-{
-    return function (SnapshotStore $snapshotStore = null) use ($eventStore): callable {
-        return function (array $commandMap) use ($eventStore, $snapshotStore): callable {
-            return function (Message $message) use ($eventStore, $snapshotStore, $commandMap): Validation {
-                /* @var AggregateDefinition $definition */
-                $definition = getAggregateDefinition($commandMap)($message);
+function buildCommandDispatcher(
+    EventStore $eventStore,
+    array $commandMap,
+    SnapshotStore $snapshotStore = null,
+    callable $publisher = null
+): callable {
+    return function (Message $message) use ($eventStore, $snapshotStore, $commandMap, $publisher): Validation {
+        try {
+            $definition = getAggregateDefinition($message, $commandMap);
+            $aggregateId = $definition->extractAggregateId($message);
+        } catch (\Throwable $e) {
+            return Failure($e);
+        }
 
-                $aggregateId = $definition->extractAggregateId($message);
+        $stateResolver = function () use ($message, $definition, $eventStore, $snapshotStore, $aggregateId): array {
+            $state = loadState($message, $definition, $snapshotStore);
 
-                $stateResolver = function () use ($message, $definition, $eventStore, $snapshotStore, $aggregateId): array {
-                    if (null === $snapshotStore) {
-                        $state = [];
-                    } else {
-                        $state = loadState($snapshotStore)($definition)($message);
-                    }
+            $nextVersion = empty($state) ? 1 : $state[$definition->versionName()] + 1;
 
-                    if (empty($state)) {
-                        $nextVersion = 1;
-                    } else {
-                        $versionKey = $definition->versionName();
-                        $nextVersion = $state[$versionKey] + 1;
-                    }
+            $events = loadEvents($eventStore, $definition, $aggregateId, $nextVersion);
 
-                    $events = loadEvents($eventStore)($definition)($aggregateId)($nextVersion);
-
-                    return $definition->reconstituteState($state, $events->iterator());
-                };
-
-                $handleCommand = function (Message $message) use ($stateResolver, $commandMap): ImmList {
-                    $handler = getHandler($commandMap)($message);
-
-                    $events = $handler($stateResolver, $message);
-
-                    if (! is_array($events)) {
-                        throw new RuntimeException('The handler did not return an array');
-                    }
-
-                    return ImmList(...$events);
-                };
-
-                $enrichEvents = function (ImmList $events) use ($definition, $aggregateId): ImmList {
-                    return enrichEvents($definition)($aggregateId)($events);
-                };
-
-                $persistEvents = function (ImmList $events) use ($eventStore, $definition, $message): Validation {
-                    return persistEvents($eventStore)($definition)($definition->extractAggregateId($message))($events);
-                };
-
-                return Function1($handleCommand)
-                    ->andThen($enrichEvents)
-                    ->andThen($persistEvents)
-                    ->run($message);
-            };
+            return $definition->reconstituteState($state, $events);
         };
+
+        $handleCommand = function (Message $message) use ($stateResolver, $commandMap): ImmList {
+            $handler = getHandler($message, $commandMap);
+
+            $events = $handler($stateResolver, $message);
+
+            if (! is_array($events)) {
+                throw new \RuntimeException('The command handler did not return an array');
+            }
+
+            return ImmList(...$events);
+        };
+
+        $enrichEvents = function (ImmList $events) use ($message, $definition, $aggregateId): Kind {
+            $enricher = getEnricherFor($definition, $aggregateId, $message);
+
+            return $events->map($enricher);
+        };
+
+        $persistEvents = function (ImmList $events) use ($eventStore, $definition, $message, $aggregateId): Kind {
+            return persistEvents($events, $eventStore, $definition, $aggregateId);
+        };
+
+        $publishEvents = function (ImmList $events) use ($publisher): Kind {
+            if ($events->isEmpty() || null === $publisher) {
+                return $events;
+            }
+
+            return $events->map($publisher);
+        };
+
+        $pipe = function () use ($message, $handleCommand, $enrichEvents, $persistEvents, $publishEvents) {
+            return Function1($handleCommand)
+                ->andThen($enrichEvents)
+                ->andThen($persistEvents)
+                ->andThen($publishEvents)
+                ->run($message);
+        };
+
+        return Attempt($pipe);
     };
 }
 
 const loadState = '\\Prooph\\Micro\\Kernel\\loadState';
 
-function loadState(SnapshotStore $snapshotStore): callable
+function loadState(Message $message, AggregateDefinition $definition, SnapshotStore $snapshotStore = null): array
 {
-    return function (AggregateDefinition $definition) use ($snapshotStore) {
-        return function (Message $message) use ($snapshotStore, $definition): array {
-            $aggregate = $snapshotStore->get($definition->aggregateType(), $definition->extractAggregateId($message));
+    if (null === $snapshotStore) {
+        return [];
+    }
 
-            if (! $aggregate) {
-                return [];
-            }
+    $aggregate = $snapshotStore->get($definition->aggregateType(), $definition->extractAggregateId($message));
 
-            return $aggregate->aggregateRoot();
-        };
-    };
+    if (! $aggregate) {
+        return [];
+    }
+
+    return $aggregate->aggregateRoot();
 }
 
 const loadEvents = '\\Prooph\\Micro\\Kernel\\loadEvents';
 
 function loadEvents(
-    EventStore $eventStore
-): callable {
-    return function (AggregateDefinition $definition) use ($eventStore): callable {
-        return function (string $aggregateId) use ($eventStore, $definition): callable {
-            return function (int $nextVersion) use ($eventStore, $definition, $aggregateId): ImmList {
-                $streamName = $definition->streamName();
-                $metadataMatcher = $definition->metadataMatcher($aggregateId, $nextVersion);
+    EventStore $eventStore,
+    AggregateDefinition $definition,
+    string $aggregateId,
+    int $nextVersion
+): Iterator {
+    $streamName = $definition->streamName();
+    $metadataMatcher = $definition->metadataMatcher($aggregateId, $nextVersion);
 
-                if (! $eventStore->hasStream($streamName)) {
-                    return Nil();
-                }
+    if (! $eventStore->hasStream($streamName)) {
+        return new EmptyIterator();
+    }
 
-                if ($definition->hasOneStreamPerAggregate()) {
-                    $streamName = new StreamName($streamName->toString() . '-' . $aggregateId); // append aggregate id to stream name
-                } else {
-                    $nextVersion = 1; // we don't know the event position, the metadata matcher will help, we start at 1
-                }
+    if ($definition->hasOneStreamPerAggregate()) {
+        $streamName = new StreamName($streamName->toString() . '-' . $aggregateId); // append aggregate id to stream name
+    } else {
+        $nextVersion = 1; // we don't know the event position, the metadata matcher will help, we start at 1
+    }
 
-                return ImmList(...$eventStore->load($streamName, $nextVersion, null, $metadataMatcher));
-            };
-        };
-    };
+    return $eventStore->load($streamName, $nextVersion, null, $metadataMatcher);
 }
 
-const enrichEvents = '\\Prooph\\Micro\\Kernel\\enrichEvents';
+const getEnricherFor = '\\Prooph\\Micro\\Kernel\\getEnricherFor';
 
-function enrichEvents(AggregateDefinition $definition): callable
+function getEnricherFor(AggregateDefinition $definition, string $aggregateId, Message $message): callable
 {
-    return function (string $aggregateId) use ($definition): callable {
-        return function (ImmList $events) use ($definition, $aggregateId) {
-            return $events->map(function ($event) use ($definition, $aggregateId): Message {
-                $aggregateVersion = $definition->extractAggregateVersion($event);
-                $metadataEnricher = $definition->metadataEnricher($aggregateId, $aggregateVersion);
+    return function (Message $event) use ($definition, $aggregateId, $message): Message {
+        $aggregateVersion = $definition->extractAggregateVersion($event);
+        $metadataEnricher = $definition->metadataEnricher($aggregateId, $aggregateVersion, $message);
 
-                if (null !== $metadataEnricher) {
-                    $event = $metadataEnricher->enrich($event);
-                }
+        if (null !== $metadataEnricher) {
+            $event = $metadataEnricher->enrich($event);
+        }
 
-                return $event;
-            });
-        };
+        return $event;
     };
 }
 
 const persistEvents = '\\Prooph\\Micro\\Kernel\\persistEvents';
 
 function persistEvents(
-    EventStore $eventStore
-): callable {
-    return function (AggregateDefinition $definition) use ($eventStore): callable {
-        return function (string $aggregateId) use ($eventStore, $definition): callable {
-            return function (ImmList $events) use ($eventStore, $definition, $aggregateId): Validation {
-                $streamName = $definition->streamName();
+    ImmList $events,
+    EventStore $eventStore,
+    AggregateDefinition $definition,
+    string $aggregateId
+): Kind {
+    if ($events->isEmpty()) {
+        return $events;
+    }
 
-                if ($definition->hasOneStreamPerAggregate()) {
-                    $streamName = new StreamName($streamName->toString() . '-' . $aggregateId); // append aggregate id to stream name
-                }
+    $streamName = $definition->streamName();
 
-                if ($eventStore instanceof TransactionalEventStore) {
-                    $eventStore->beginTransaction();
-                }
+    if ($definition->hasOneStreamPerAggregate()) {
+        $streamName = new StreamName($streamName->toString() . '-' . $aggregateId); // append aggregate id to stream name
+    }
 
-                try {
-                    if ($eventStore->hasStream($streamName)) {
-                        $eventStore->appendTo($streamName, $events->iterator());
-                    } else {
-                        $eventStore->create(new Stream($streamName, $events->iterator()));
-                    }
-                } catch (\Throwable $e) {
-                    if ($eventStore instanceof TransactionalEventStore) {
-                        $eventStore->rollback();
-                    }
+    if ($eventStore instanceof TransactionalEventStore) {
+        $eventStore->beginTransaction();
+    }
 
-                    if ($e instanceof ConcurrencyException) {
-                        return Failure($e);
-                    }
+    try {
+        if ($eventStore->hasStream($streamName)) {
+            $eventStore->appendTo($streamName, $events->iterator());
+        } else {
+            $eventStore->create(new Stream($streamName, $events->iterator()));
+        }
+    } catch (\Throwable $e) {
+        if ($eventStore instanceof TransactionalEventStore) {
+            $eventStore->rollback();
+        }
 
-                    throw $e;
-                }
+        throw $e;
+    }
 
-                if ($eventStore instanceof TransactionalEventStore) {
-                    $eventStore->commit();
-                }
+    if ($eventStore instanceof TransactionalEventStore) {
+        $eventStore->commit();
+    }
 
-                return Success(null);
-            };
-        };
-    };
+    return $events;
 }
 
 const getHandler = '\\Prooph\\Micro\\Kernel\\getHandler';
 
-function getHandler(array $c): callable
+function getHandler(Message $m, array $c): callable
 {
-    return function (Message $m) use ($c) {
-        $n = $m->messageName();
+    $n = $m->messageName();
 
-        if (! array_key_exists($n, $c)) {
-            throw new RuntimeException(sprintf(
-                'Unknown message "%s". Message name not mapped to an aggregate.',
-                $n
-            ));
-        }
+    if (! array_key_exists($n, $c)) {
+        throw new RuntimeException(sprintf(
+            'Unknown message "%s". Message name not mapped to an aggregate.',
+            $n
+        ));
+    }
 
-        return $c[$n]['handler'];
-    };
+    return $c[$n]['handler'];
 }
 
 const getAggregateDefinition = '\\Prooph\\Micro\\Kernel\\getAggregateDefinition';
 
-function getAggregateDefinition(array $c): callable
+function getAggregateDefinition(Message $m, array $c): AggregateDefinition
 {
-    return function (Message $m) use ($c): AggregateDefinition {
-        $n = $m->messageName();
+    $n = $m->messageName();
 
-        if (! isset($c[$m->messageName()])) {
-            throw new RuntimeException(sprintf('Unknown message %s. Message name not mapped to an aggregate.', $n));
-        }
+    if (! isset($c[$m->messageName()])) {
+        throw new RuntimeException(sprintf('Unknown message %s. Message name not mapped to an aggregate.', $n));
+    }
 
-        return new $c[$n]['definition']();
-    };
+    return new $c[$n]['definition']();
 }

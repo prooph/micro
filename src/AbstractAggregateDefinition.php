@@ -81,7 +81,7 @@ abstract class AbstractAggregateDefinition implements AggregateDefinition
             ->withMetadataMatch('_aggregate_version', Operator::GREATER_THAN_EQUALS(), $aggregateVersion);
     }
 
-    public function metadataEnricher(string $aggregateId, int $aggregateVersion): ?MetadataEnricher
+    public function metadataEnricher(string $aggregateId, int $aggregateVersion, Message $message = null): ?MetadataEnricher
     {
         return new class($aggregateId, $this->aggregateType(), $aggregateVersion) implements MetadataEnricher {
             private $aggregateId;
