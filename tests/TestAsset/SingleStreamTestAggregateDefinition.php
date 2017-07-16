@@ -51,7 +51,7 @@ final class SingleStreamTestAggregateDefinition implements AggregateDefinition
         return new StreamName('foo');
     }
 
-    public function metadataEnricher(string $aggregateId, int $aggregateVersion): ?MetadataEnricher
+    public function metadataEnricher(string $aggregateId, int $aggregateVersion, Message $causation = null): ?MetadataEnricher
     {
         return null;
     }
