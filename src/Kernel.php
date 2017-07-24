@@ -14,28 +14,27 @@ namespace Prooph\Micro\Kernel;
 
 use EmptyIterator;
 use Iterator;
+use Phunkie\Types\ImmList;
+use Phunkie\Types\Kind;
+use Phunkie\Validation\Validation;
 use Prooph\Common\Messaging\Message;
 use Prooph\EventStore\EventStore;
-use Prooph\EventStore\Metadata\MetadataMatcher;
 use Prooph\EventStore\Stream;
 use Prooph\EventStore\StreamName;
 use Prooph\EventStore\TransactionalEventStore;
-use Prooph\Micro\AggregateDefiniton;
-use Prooph\Micro\AggregateResult;
+use Prooph\Micro\AggregateDefinition;
 use Prooph\SnapshotStore\SnapshotStore;
 use RuntimeException;
-use Throwable;
+use function Phunkie\Functions\function1\compose;
 
-const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
-
+const buildCommandDispatcher = '\Prooph\Micro\Kernel\buildCommandDispatcher';
 /**
- * builds a dispatcher to return a function that receives a messages and return the state
+ * builds a dispatcher and returns a function that receives a messages and returns Success | Failure
  *
  * usage:
- * $dispatch = buildDispatcher($commandMap, $eventStoreFactory, $snapshotStoreFactory);
- * $state = $dispatch($message);
+ * $dispatch = buildDispatcher($eventStore, $commandMap, $snapshotStore, $publisher);
+ * $attempt = $dispatch($message);
  *
- * $producerFactory is expected to be a callback that returns an instance of Prooph\ServiceBus\Async\MessageProducer.
  * $commandMap is expected to be an array like this:
  * [
  *     RegisterUser::class => [
@@ -52,92 +51,81 @@ const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
  * $message is expected to be an instance of Prooph\Common\Messaging\Message
  */
 function buildCommandDispatcher(
+    EventStore $eventStore,
     array $commandMap,
-    callable $eventStoreFactory,
-    callable $snapshotStoreFactory = null
+    SnapshotStore $snapshotStore = null,
+    callable $publisher = null
 ): callable {
-    return function (Message $message) use (
-        $commandMap,
-        $eventStoreFactory,
-        $snapshotStoreFactory
-    ) {
-        $getDefinition = function (Message $message) use ($commandMap): AggregateDefiniton {
-            return getAggregateDefinition($message, $commandMap);
-        };
-
-        $stateResolver = function () use ($message, $getDefinition, $eventStoreFactory, $snapshotStoreFactory) {
-            $definition = $getDefinition($message);
-
-            if (null === $snapshotStoreFactory) {
-                $state = [];
-            } else {
-                $state = loadState($snapshotStoreFactory(), $message, $definition);
-            }
-
-            /* @var AggregateDefiniton $definition */
+    return function (Message $message) use ($eventStore, $snapshotStore, $commandMap, $publisher): Validation {
+        try {
+            $definition = getAggregateDefinition($message, $commandMap);
             $aggregateId = $definition->extractAggregateId($message);
+        } catch (\Throwable $e) {
+            return Failure($e);
+        }
 
-            if (empty($state)) {
-                $nextVersion = 1;
-            } else {
-                $versionKey = $definition->versionName();
-                $nextVersion = $state[$versionKey] + 1;
-            }
+        $stateResolver = function () use ($message, $definition, $eventStore, $snapshotStore, $aggregateId): array {
+            $state = loadState($message, $definition, $snapshotStore);
 
-            $events = loadEvents($definition, $aggregateId, $nextVersion, $eventStoreFactory);
+            $nextVersion = empty($state) ? 1 : $state[$definition->versionName()] + 1;
+
+            $events = loadEvents($eventStore, $definition, $aggregateId, $nextVersion);
 
             return $definition->reconstituteState($state, $events);
         };
 
-        $handleCommand = function (Message $message) use ($stateResolver, $commandMap): array {
+        $handleCommand = function (Message $message) use ($stateResolver, $commandMap): ImmList {
             $handler = getHandler($message, $commandMap);
 
             $events = $handler($stateResolver, $message);
 
             if (! is_array($events)) {
-                throw new RuntimeException('The handler did not return an array');
+                throw new \RuntimeException('The command handler did not return an array');
             }
 
-            return $events;
+            return ImmList(...$events);
         };
 
-        $persistEvents = function (array $events) use ($eventStoreFactory, $message, $getDefinition): array {
-            $definition = $getDefinition($message);
+        $enrichEvents = function (ImmList $events) use ($message, $definition, $aggregateId): Kind {
+            $enricher = getEnricherFor($definition, $aggregateId, $message);
 
-            return persistEvents($events, $eventStoreFactory, $definition, $definition->extractAggregateId($message));
+            return $events->map($enricher);
         };
 
-        return pipeline(
-            $handleCommand,
-            $persistEvents
-        )($message);
+        $persistEvents = function (ImmList $events) use ($eventStore, $definition, $message, $aggregateId): Kind {
+            return persistEvents($events, $eventStore, $definition, $aggregateId);
+        };
+
+        $publishEvents = function (ImmList $events) use ($publisher): Kind {
+            if ($events->isEmpty() || null === $publisher) {
+                return $events;
+            }
+
+            return $events->map($publisher);
+        };
+
+        $pipe = function () use ($message, $handleCommand, $enrichEvents, $persistEvents, $publishEvents) {
+            return compose(
+                $handleCommand,
+                $enrichEvents,
+                $persistEvents,
+                $publishEvents
+            )($message);
+        };
+
+        return Attempt($pipe);
     };
 }
 
-const pipeline = 'Prooph\Micro\Kernel\pipeline';
+const loadState = '\Prooph\Micro\Kernel\loadState';
 
-function pipeline(callable $firstCallback, callable ...$callbacks): callable
+function loadState(Message $message, AggregateDefinition $definition, SnapshotStore $snapshotStore = null): array
 {
-    array_unshift($callbacks, $firstCallback);
+    if (null === $snapshotStore) {
+        return [];
+    }
 
-    return function ($value = null) use ($callbacks) {
-        try {
-            $result = array_reduce($callbacks, function ($accumulator, callable $callback) {
-                return $callback($accumulator);
-            }, $value);
-        } catch (Throwable $e) {
-            return $e;
-        }
-
-        return $result;
-    };
-}
-
-const loadState = 'Prooph\Micro\Kernel\loadState';
-
-function loadState(SnapshotStore $snapshotStore, Message $message, AggregateDefiniton $definiton): array
-{
-    $aggregate = $snapshotStore->get($definiton->aggregateType(), $definiton->extractAggregateId($message));
+    $aggregate = $snapshotStore->get($definition->aggregateType(), $definition->extractAggregateId($message));
 
     if (! $aggregate) {
         return [];
@@ -146,20 +134,14 @@ function loadState(SnapshotStore $snapshotStore, Message $message, AggregateDefi
     return $aggregate->aggregateRoot();
 }
 
-const loadEvents = 'Prooph\Micro\Kernel\loadEvents';
+const loadEvents = '\Prooph\Micro\Kernel\loadEvents';
 
 function loadEvents(
-    AggregateDefiniton $definition,
+    EventStore $eventStore,
+    AggregateDefinition $definition,
     string $aggregateId,
-    int $nextVersion,
-    callable $eventStoreFactory
+    int $nextVersion
 ): Iterator {
-    $eventStore = $eventStoreFactory();
-
-    if (! $eventStore instanceof EventStore) {
-        throw new RuntimeException('$eventStoreFactory did not return an instance of ' . EventStore::class);
-    }
-
     $streamName = $definition->streamName();
     $metadataMatcher = $definition->metadataMatcher($aggregateId, $nextVersion);
 
@@ -176,23 +158,13 @@ function loadEvents(
     return $eventStore->load($streamName, $nextVersion, null, $metadataMatcher);
 }
 
-const persistEvents = 'Prooph\Micro\Kernel\persistEvents';
+const getEnricherFor = '\Prooph\Micro\Kernel\getEnricherFor';
 
-function persistEvents(
-    array $events,
-    callable $eventStoreFactory,
-    AggregateDefiniton $definition,
-    string $aggregateId
-): array {
-    $eventStore = $eventStoreFactory();
-
-    if (! $eventStore instanceof EventStore) {
-        throw new RuntimeException('$eventStoreFactory did not return an instance of ' . EventStore::class);
-    }
-
-    $metadataEnricher = function (Message $event) use ($events, $definition, $aggregateId) {
+function getEnricherFor(AggregateDefinition $definition, string $aggregateId, Message $message): callable
+{
+    return function (Message $event) use ($definition, $aggregateId, $message): Message {
         $aggregateVersion = $definition->extractAggregateVersion($event);
-        $metadataEnricher = $definition->metadataEnricher($aggregateId, $aggregateVersion);
+        $metadataEnricher = $definition->metadataEnricher($aggregateId, $aggregateVersion, $message);
 
         if (null !== $metadataEnricher) {
             $event = $metadataEnricher->enrich($event);
@@ -200,8 +172,19 @@ function persistEvents(
 
         return $event;
     };
+}
 
-    $events = array_map($metadataEnricher, $events);
+const persistEvents = '\Prooph\Micro\Kernel\persistEvents';
+
+function persistEvents(
+    ImmList $events,
+    EventStore $eventStore,
+    AggregateDefinition $definition,
+    string $aggregateId
+): Kind {
+    if ($events->isEmpty()) {
+        return $events;
+    }
 
     $streamName = $definition->streamName();
 
@@ -215,9 +198,9 @@ function persistEvents(
 
     try {
         if ($eventStore->hasStream($streamName)) {
-            $eventStore->appendTo($streamName, new \ArrayIterator($events));
+            $eventStore->appendTo($streamName, $events->iterator());
         } else {
-            $eventStore->create(new Stream($streamName, new \ArrayIterator($events)));
+            $eventStore->create(new Stream($streamName, $events->iterator()));
         }
     } catch (\Throwable $e) {
         if ($eventStore instanceof TransactionalEventStore) {
@@ -234,37 +217,31 @@ function persistEvents(
     return $events;
 }
 
-const getHandler = 'Prooph\Micro\Kernel\getHandler';
+const getHandler = '\Prooph\Micro\Kernel\getHandler';
 
-function getHandler(Message $message, array $commandMap): callable
+function getHandler(Message $m, array $c): callable
 {
-    if (! array_key_exists($message->messageName(), $commandMap)) {
+    $n = $m->messageName();
+
+    if (! array_key_exists($n, $c)) {
         throw new RuntimeException(sprintf(
             'Unknown message "%s". Message name not mapped to an aggregate.',
-            $message->messageName()
+            $n
         ));
     }
 
-    return $commandMap[$message->messageName()]['handler'];
+    return $c[$n]['handler'];
 }
 
-const getAggregateDefinition = 'Prooph\Micro\Kernel\getAggregateDefinition';
+const getAggregateDefinition = '\Prooph\Micro\Kernel\getAggregateDefinition';
 
-function getAggregateDefinition(Message $message, array $commandMap): AggregateDefiniton
+function getAggregateDefinition(Message $m, array $c): AggregateDefinition
 {
-    static $cached = [];
+    $n = $m->messageName();
 
-    $messageName = $message->messageName();
-
-    if (isset($cached[$messageName])) {
-        return $cached[$messageName];
+    if (! isset($c[$m->messageName()])) {
+        throw new RuntimeException(sprintf('Unknown message %s. Message name not mapped to an aggregate.', $n));
     }
 
-    if (! isset($commandMap[$messageName])) {
-        throw new RuntimeException(sprintf('Unknown message %s. Message name not mapped to an aggregate.', $message->messageName()));
-    }
-
-    $cached[$messageName] = new $commandMap[$messageName]['definition']();
-
-    return $cached[$messageName];
+    return new $c[$n]['definition']();
 }

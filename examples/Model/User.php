@@ -21,7 +21,7 @@ use Prooph\MicroExample\Model\Event\UserWasRegistered;
 use Prooph\MicroExample\Model\Event\UserWasRegisteredWithDuplicateEmail;
 use Prooph\MicroExample\Model\UniqueEmailGuard;
 
-const registerUser = 'Prooph\MicroExample\Model\User\registerUser';
+const registerUser = '\Prooph\MicroExample\Model\User\registerUser';
 
 function registerUser(callable $stateResolver, RegisterUser $command, UniqueEmailGuard $guard): array
 {
@@ -32,7 +32,7 @@ function registerUser(callable $stateResolver, RegisterUser $command, UniqueEmai
     return [new UserWasRegisteredWithDuplicateEmail(array_merge($command->payload(), ['version' => ++$stateResolver()['version']]))];
 }
 
-const changeUserName = 'Prooph\MicroExample\Model\User\changeUserName';
+const changeUserName = '\Prooph\MicroExample\Model\User\changeUserName';
 
 function changeUserName(callable $stateResolver, ChangeUserName $command): array
 {
@@ -43,7 +43,7 @@ function changeUserName(callable $stateResolver, ChangeUserName $command): array
     return [new UserNameWasChanged(array_merge($command->payload(), ['version' => ++$stateResolver()['version']]))];
 }
 
-const apply = 'Prooph\MicroExample\Model\User\apply';
+const apply = '\Prooph\MicroExample\Model\User\apply';
 
 function apply(array $state, Message ...$events): array
 {

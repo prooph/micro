@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Prooph\MicroExample\Script;
 
+use Phunkie\Validation\Validation;
 use Prooph\Common\Messaging\Message;
 use Prooph\Micro\Kernel;
 use Prooph\MicroExample\Infrastructure\UserAggregateDefinition;
@@ -20,6 +21,7 @@ use Prooph\MicroExample\Model\Command\InvalidCommand;
 use Prooph\MicroExample\Model\Command\RegisterUser;
 use Prooph\MicroExample\Model\Command\UnknownCommand;
 use Prooph\MicroExample\Model\User;
+use function Phunkie\Functions\show\show;
 
 $start = microtime(true);
 
@@ -43,35 +45,36 @@ $commandMap = [
     ],
 ];
 
-$dispatch = Kernel\buildCommandDispatcher(
-    $commandMap,
-    $factories['eventStore'],
-    $factories['snapshotStore']
-);
+function showResult(Validation $result): void
+{
+    $on = match($result);
+    switch (true) {
+        case $on(Success(_)):
+            echo $result->show() . PHP_EOL;
+            echo json_encode($result->getOrElse('')->head()->payload()) . PHP_EOL . PHP_EOL;
+            break;
+        case $on(Failure(_)):
+            echo $result->show() . PHP_EOL . PHP_EOL;
+            break;
+    }
+}
 
-$command = new RegisterUser(['id' => '1', 'name' => 'Alex', 'email' => 'member@getprooph.org']);
+$dispatch = Kernel\buildCommandDispatcher($factories['eventStore'](), $commandMap, $factories['snapshotStore']());
 
-$events = $dispatch($command);
+/* @var Validation $result */
+$result = $dispatch(new RegisterUser(['id' => '1', 'name' => 'Alex', 'email' => 'member@getprooph.org']));
+showResult($result);
 
-echo "User was registered, emitted event payload: \n";
-echo json_encode($events[0]->payload()) . "\n\n";
+$result = $dispatch(new ChangeUserName(['id' => '1', 'name' => 'Sascha']));
+showResult($result);
 
-$events = $dispatch(new ChangeUserName(['id' => '1', 'name' => 'Sascha']));
+// a TypeError
+$result = $dispatch(new InvalidCommand());
+showResult($result);
 
-echo "Username changed, emitted event payload: \n";
-echo json_encode($events[0]->payload()) . "\n\n";
-
-// should return a TypeError
-$throwable = $dispatch(new InvalidCommand());
-
-echo get_class($throwable) . "\n";
-echo $throwable->getMessage() . "\n\n";
-
-$throwable = $dispatch(new UnknownCommand());
-
-// should return a RuntimeException
-echo get_class($throwable) . "\n";
-echo $throwable->getMessage() . "\n\n";
+// unknown command
+$result = $dispatch(new UnknownCommand());
+showResult($result);
 
 $time = microtime(true) - $start;
 

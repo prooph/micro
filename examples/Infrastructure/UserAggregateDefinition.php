@@ -14,10 +14,10 @@ namespace Prooph\MicroExample\Infrastructure;
 
 use Prooph\Common\Messaging\Message;
 use Prooph\EventStore\StreamName;
-use Prooph\Micro\AbstractAggregateDefiniton;
+use Prooph\Micro\AbstractAggregateDefinition;
 use Prooph\MicroExample\Model\User;
 
-final class UserAggregateDefinition extends AbstractAggregateDefiniton
+final class UserAggregateDefinition extends AbstractAggregateDefinition
 {
     public function aggregateType(): string
     {

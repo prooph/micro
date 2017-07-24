@@ -14,11 +14,12 @@ namespace ProophTest\Micro;
 
 use PHPUnit\Framework\TestCase;
 use Prooph\Common\Messaging\Message;
+use Prooph\EventStore\Metadata\FieldType;
 use Prooph\EventStore\Metadata\MetadataEnricher;
 use Prooph\EventStore\Metadata\MetadataMatcher;
 use Prooph\EventStore\Metadata\Operator;
 use Prooph\EventStore\StreamName;
-use Prooph\Micro\AbstractAggregateDefiniton;
+use Prooph\Micro\AbstractAggregateDefinition;
 
 class AbstractAggregateDefinitionTest extends TestCase
 {
@@ -58,6 +59,30 @@ class AbstractAggregateDefinitionTest extends TestCase
     /**
      * @test
      */
+    public function it_extracts_aggregate_version(): void
+    {
+        $message = $this->prophesize(Message::class);
+        $message->payload()->willReturn(['version' => 5])->shouldBeCalled();
+
+        $this->assertEquals(5, $this->createDefinition()->extractAggregateVersion($message->reveal()));
+    }
+
+    /**
+     * @test
+     */
+    public function it_throws_exception_when_no_version_property_found_during_extraction(): void
+    {
+        $this->expectException(\RuntimeException::class);
+
+        $message = $this->prophesize(Message::class);
+        $message->payload()->willReturn([])->shouldBeCalled();
+
+        $this->createDefinition()->extractAggregateVersion($message->reveal());
+    }
+
+    /**
+     * @test
+     */
     public function it_returns_metadata_matcher(): void
     {
         $metadataMatcher = $this->createDefinition()->metadataMatcher('some_id', 5);
@@ -70,16 +95,19 @@ class AbstractAggregateDefinitionTest extends TestCase
                     'field' => '_aggregate_id',
                     'operator' => Operator::EQUALS(),
                     'value' => 'some_id',
+                    'fieldType' => FieldType::METADATA(),
                 ],
                 [
                     'field' => '_aggregate_type',
                     'operator' => Operator::EQUALS(),
                     'value' => 'foo',
+                    'fieldType' => FieldType::METADATA(),
                 ],
                 [
                     'field' => '_aggregate_version',
                     'operator' => Operator::GREATER_THAN_EQUALS(),
                     'value' => 5,
+                    'fieldType' => FieldType::METADATA(),
                 ],
             ],
             $metadataMatcher->data()
@@ -121,9 +149,17 @@ class AbstractAggregateDefinitionTest extends TestCase
         $this->assertEquals(1, $state['count']);
     }
 
-    public function createDefinition(): AbstractAggregateDefiniton
+    /**
+     * @test
+     */
+    public function it_has_not_one_stream_per_aggregate_as_default(): void
     {
-        return new class() extends AbstractAggregateDefiniton {
+        $this->assertFalse($this->createDefinition()->hasOneStreamPerAggregate());
+    }
+
+    public function createDefinition(): AbstractAggregateDefinition
+    {
+        return new class() extends AbstractAggregateDefinition {
             public function streamName(): StreamName
             {
                 return new StreamName('foo');

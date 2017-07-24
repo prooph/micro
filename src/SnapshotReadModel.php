@@ -28,7 +28,7 @@ final class SnapshotReadModel implements ReadModel
     private $snapshotStore;
 
     /**
-     * @var AggregateDefiniton
+     * @var AggregateDefinition
      */
     private $aggregateDefinition;
 
@@ -39,7 +39,7 @@ final class SnapshotReadModel implements ReadModel
 
     public function __construct(
         SnapshotStore $snapshotStore,
-        AggregateDefiniton $aggregateDefiniton
+        AggregateDefinition $aggregateDefiniton
     ) {
         $this->snapshotStore = $snapshotStore;
         $this->aggregateDefinition = $aggregateDefiniton;
