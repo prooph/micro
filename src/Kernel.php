@@ -14,7 +14,6 @@ namespace Prooph\Micro\Kernel;
 
 use EmptyIterator;
 use Iterator;
-use function Phunkie\Functions\function1\compose;
 use Phunkie\Types\ImmList;
 use Phunkie\Types\Kind;
 use Phunkie\Validation\Validation;
@@ -26,6 +25,7 @@ use Prooph\EventStore\TransactionalEventStore;
 use Prooph\Micro\AggregateDefinition;
 use Prooph\SnapshotStore\SnapshotStore;
 use RuntimeException;
+use function Phunkie\Functions\function1\compose;
 
 const buildCommandDispatcher = '\Prooph\Micro\Kernel\buildCommandDispatcher';
 /**

@@ -13,11 +13,11 @@ declare(strict_types=1);
 namespace ProophTest\Micro;
 
 use PHPUnit\Framework\TestCase;
-use Phunkie\Types\ImmList;
 use Phunkie\Validation\Failure;
 use Prooph\Common\Messaging\Message;
 use Prooph\EventStore\EventStore;
 use Prooph\EventStore\InMemoryEventStore;
+use Prooph\EventStore\Metadata\MetadataEnricher;
 use Prooph\EventStore\Stream;
 use Prooph\EventStore\StreamName;
 use Prooph\EventStore\TransactionalEventStore;
@@ -145,6 +145,20 @@ class KernelTest extends TestCase
     /**
      * @test
      */
+    public function it_returns_early_when_loading_state_and_no_snapshot_store_given(): void
+    {
+        $message = $this->prophesize(Message::class);
+        $message = $message->reveal();
+
+        $definition = $this->prophesize(AggregateDefinition::class);
+
+        $result = k\loadState($message, $definition->reveal(), null);
+        $this->assertEquals([], $result);
+    }
+
+    /**
+     * @test
+     */
     public function it_loads_events_when_stream_not_found(): void
     {
         $eventStore = $this->prophesize(EventStore::class);
@@ -200,6 +214,30 @@ class KernelTest extends TestCase
         $aggregateDefinition = $this->prophesize(AggregateDefinition::class);
         $aggregateDefinition->streamName()->willReturn(new StreamName('foo'))->shouldBeCalled();
         $aggregateDefinition->hasOneStreamPerAggregate()->willReturn(false)->shouldBeCalled();
+
+        $validation = k\persistEvents(ImmList(...$raisedEvents), $eventStore->reveal(), $aggregateDefinition->reveal(), 'some_id');
+
+        if ($validation instanceof Failure) {
+            $this->fail($validation->toString());
+        }
+    }
+
+    /**
+     * @test
+     */
+    public function it_returns_early_on_persist_when_list_is_empty(): void
+    {
+        $streamName = new StreamName('foo');
+
+        $eventStore = $this->prophesize(EventStore::class);
+        $eventStore->hasStream($streamName)->willReturn(true)->shouldNotBeCalled();
+        $eventStore->appendTo($streamName, Argument::type(\Iterator::class))->shouldNotBeCalled();
+
+        $raisedEvents = [];
+
+        $aggregateDefinition = $this->prophesize(AggregateDefinition::class);
+        $aggregateDefinition->streamName()->willReturn(new StreamName('foo'))->shouldNotBeCalled();
+        $aggregateDefinition->hasOneStreamPerAggregate()->willReturn(false)->shouldNotBeCalled();
 
         $validation = k\persistEvents(ImmList(...$raisedEvents), $eventStore->reveal(), $aggregateDefinition->reveal(), 'some_id');
 
@@ -281,10 +319,14 @@ class KernelTest extends TestCase
 
     /**
      * @test
+     * @group by
      */
     public function it_creates_stream_during_persist_when_no_stream_found_and_enriches_with_metadata(): void
     {
+        $finalMessage = $this->prophesize(Message::class);
+
         $message = $this->prophesize(Message::class);
+        $message->withAddedMetadata('key', 'value')->willReturn($finalMessage->reveal())->shouldBeCalled();
 
         $streamName = $this->prophesize(StreamName::class);
         $streamName = $streamName->reveal();
@@ -296,8 +338,25 @@ class KernelTest extends TestCase
         $aggregateDefinition = $this->prophesize(AggregateDefinition::class);
         $aggregateDefinition->streamName()->willReturn($streamName)->shouldBeCalled();
         $aggregateDefinition->hasOneStreamPerAggregate()->willReturn(false)->shouldBeCalled();
+        $aggregateDefinition->extractAggregateVersion($message)->willReturn(5)->shouldBeCalled();
+        $aggregateDefinition->metadataEnricher('some_id', 5, $message)->willReturn(new class() implements MetadataEnricher {
+            public function enrich(Message $message): Message
+            {
+                return $message->withAddedMetadata('key', 'value');
+            }
+        }
+        )->shouldBeCalled();
+        $aggregateDefinition = $aggregateDefinition->reveal();
 
-        $validation = k\persistEvents(ImmList($message), $eventStore->reveal(), $aggregateDefinition->reveal(), 'some_id');
+        $message = $message->reveal();
+
+        $events = ImmList($message);
+
+        $enricher = k\getEnricherFor($aggregateDefinition, 'some_id', $message);
+
+        $events = $events->map($enricher);
+
+        $validation = k\persistEvents($events, $eventStore->reveal(), $aggregateDefinition, 'some_id');
 
         if ($validation instanceof Failure) {
             $this->fail($validation->toString());

@@ -59,6 +59,30 @@ class AbstractAggregateDefinitionTest extends TestCase
     /**
      * @test
      */
+    public function it_extracts_aggregate_version(): void
+    {
+        $message = $this->prophesize(Message::class);
+        $message->payload()->willReturn(['version' => 5])->shouldBeCalled();
+
+        $this->assertEquals(5, $this->createDefinition()->extractAggregateVersion($message->reveal()));
+    }
+
+    /**
+     * @test
+     */
+    public function it_throws_exception_when_no_version_property_found_during_extraction(): void
+    {
+        $this->expectException(\RuntimeException::class);
+
+        $message = $this->prophesize(Message::class);
+        $message->payload()->willReturn([])->shouldBeCalled();
+
+        $this->createDefinition()->extractAggregateVersion($message->reveal());
+    }
+
+    /**
+     * @test
+     */
     public function it_returns_metadata_matcher(): void
     {
         $metadataMatcher = $this->createDefinition()->metadataMatcher('some_id', 5);
@@ -123,6 +147,14 @@ class AbstractAggregateDefinitionTest extends TestCase
 
         $this->assertArrayHasKey('count', $state);
         $this->assertEquals(1, $state['count']);
+    }
+
+    /**
+     * @test
+     */
+    public function it_has_not_one_stream_per_aggregate_as_default(): void
+    {
+        $this->assertFalse($this->createDefinition()->hasOneStreamPerAggregate());
     }
 
     public function createDefinition(): AbstractAggregateDefinition

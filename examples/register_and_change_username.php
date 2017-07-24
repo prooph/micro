@@ -12,7 +12,6 @@ declare(strict_types=1);
 
 namespace Prooph\MicroExample\Script;
 
-use function Phunkie\Functions\show\show;
 use Phunkie\Validation\Validation;
 use Prooph\Common\Messaging\Message;
 use Prooph\Micro\Kernel;
@@ -22,6 +21,7 @@ use Prooph\MicroExample\Model\Command\InvalidCommand;
 use Prooph\MicroExample\Model\Command\RegisterUser;
 use Prooph\MicroExample\Model\Command\UnknownCommand;
 use Prooph\MicroExample\Model\User;
+use function Phunkie\Functions\show\show;
 
 $start = microtime(true);
 
@@ -48,7 +48,7 @@ $commandMap = [
 function showResult(Validation $result): void
 {
     $on = match($result);
-    switch(true) {
+    switch (true) {
         case $on(Success(_)):
             echo $result->show() . PHP_EOL;
             echo json_encode($result->getOrElse('')->head()->payload()) . PHP_EOL . PHP_EOL;
