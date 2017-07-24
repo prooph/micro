@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Prooph\MicroExample\Script;
 
+use function Phunkie\Functions\show\show;
 use Phunkie\Validation\Validation;
 use Prooph\Common\Messaging\Message;
 use Prooph\Micro\Kernel;
@@ -44,24 +45,36 @@ $commandMap = [
     ],
 ];
 
+function showResult(Validation $result): void
+{
+    $on = match($result);
+    switch(true) {
+        case $on(Success(_)):
+            echo $result->show() . PHP_EOL;
+            echo json_encode($result->getOrElse('')->head()->payload()) . PHP_EOL . PHP_EOL;
+            break;
+        case $on(Failure(_)):
+            echo $result->show() . PHP_EOL . PHP_EOL;
+            break;
+    }
+}
+
 $dispatch = Kernel\buildCommandDispatcher($factories['eventStore'](), $commandMap, $factories['snapshotStore']());
 
 /* @var Validation $result */
 $result = $dispatch(new RegisterUser(['id' => '1', 'name' => 'Alex', 'email' => 'member@getprooph.org']));
-echo $result->show() . PHP_EOL;
-echo json_encode($result->getOrElse('')->head()->payload()) . PHP_EOL . PHP_EOL;
+showResult($result);
 
 $result = $dispatch(new ChangeUserName(['id' => '1', 'name' => 'Sascha']));
-echo $result->show() . PHP_EOL;
-echo json_encode($result->getOrElse('')->head()->payload()) . PHP_EOL . PHP_EOL;
+showResult($result);
 
 // a TypeError
 $result = $dispatch(new InvalidCommand());
-echo $result->show() . PHP_EOL . PHP_EOL;
+showResult($result);
 
 // unknown command
 $result = $dispatch(new UnknownCommand());
-echo $result->show() . PHP_EOL . PHP_EOL;
+showResult($result);
 
 $time = microtime(true) - $start;
 

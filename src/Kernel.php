@@ -14,6 +14,7 @@ namespace Prooph\Micro\Kernel;
 
 use EmptyIterator;
 use Iterator;
+use function Phunkie\Functions\function1\compose;
 use Phunkie\Types\ImmList;
 use Phunkie\Types\Kind;
 use Phunkie\Validation\Validation;
@@ -26,7 +27,7 @@ use Prooph\Micro\AggregateDefinition;
 use Prooph\SnapshotStore\SnapshotStore;
 use RuntimeException;
 
-const buildCommandDispatcher = '\\Prooph\\Micro\\Kernel\\buildCommandDispatcher';
+const buildCommandDispatcher = '\Prooph\Micro\Kernel\buildCommandDispatcher';
 /**
  * builds a dispatcher and returns a function that receives a messages and returns Success | Failure
  *
@@ -104,18 +105,19 @@ function buildCommandDispatcher(
         };
 
         $pipe = function () use ($message, $handleCommand, $enrichEvents, $persistEvents, $publishEvents) {
-            return Function1($handleCommand)
-                ->andThen($enrichEvents)
-                ->andThen($persistEvents)
-                ->andThen($publishEvents)
-                ->run($message);
+            return compose(
+                $handleCommand,
+                $enrichEvents,
+                $persistEvents,
+                $publishEvents
+            )($message);
         };
 
         return Attempt($pipe);
     };
 }
 
-const loadState = '\\Prooph\\Micro\\Kernel\\loadState';
+const loadState = '\Prooph\Micro\Kernel\loadState';
 
 function loadState(Message $message, AggregateDefinition $definition, SnapshotStore $snapshotStore = null): array
 {
@@ -132,7 +134,7 @@ function loadState(Message $message, AggregateDefinition $definition, SnapshotSt
     return $aggregate->aggregateRoot();
 }
 
-const loadEvents = '\\Prooph\\Micro\\Kernel\\loadEvents';
+const loadEvents = '\Prooph\Micro\Kernel\loadEvents';
 
 function loadEvents(
     EventStore $eventStore,
@@ -156,7 +158,7 @@ function loadEvents(
     return $eventStore->load($streamName, $nextVersion, null, $metadataMatcher);
 }
 
-const getEnricherFor = '\\Prooph\\Micro\\Kernel\\getEnricherFor';
+const getEnricherFor = '\Prooph\Micro\Kernel\getEnricherFor';
 
 function getEnricherFor(AggregateDefinition $definition, string $aggregateId, Message $message): callable
 {
@@ -172,7 +174,7 @@ function getEnricherFor(AggregateDefinition $definition, string $aggregateId, Me
     };
 }
 
-const persistEvents = '\\Prooph\\Micro\\Kernel\\persistEvents';
+const persistEvents = '\Prooph\Micro\Kernel\persistEvents';
 
 function persistEvents(
     ImmList $events,
@@ -215,7 +217,7 @@ function persistEvents(
     return $events;
 }
 
-const getHandler = '\\Prooph\\Micro\\Kernel\\getHandler';
+const getHandler = '\Prooph\Micro\Kernel\getHandler';
 
 function getHandler(Message $m, array $c): callable
 {
@@ -231,7 +233,7 @@ function getHandler(Message $m, array $c): callable
     return $c[$n]['handler'];
 }
 
-const getAggregateDefinition = '\\Prooph\\Micro\\Kernel\\getAggregateDefinition';
+const getAggregateDefinition = '\Prooph\Micro\Kernel\getAggregateDefinition';
 
 function getAggregateDefinition(Message $m, array $c): AggregateDefinition
 {
