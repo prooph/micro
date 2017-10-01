@@ -28,7 +28,9 @@ use Prooph\SnapshotStore\Snapshot;
 use Prooph\SnapshotStore\SnapshotStore;
 use ProophTest\Micro\TestAsset\OneStreamPerAggregateTestAggregateDefinition;
 use ProophTest\Micro\TestAsset\SingleStreamTestAggregateDefinition;
+use ProophTest\Micro\TestAsset\SingleStreamTestAggregateDefinition2;
 use ProophTest\Micro\TestAsset\TestDomainEvent;
+use ProophTest\Micro\TestAsset\TestState;
 use Prophecy\Argument;
 
 class KernelTest extends TestCase
@@ -63,6 +65,189 @@ class KernelTest extends TestCase
 
         if ($validation instanceof Failure) {
             $this->fail($validation->toString());
+        }
+    }
+
+    /**
+     * @test
+     */
+    public function it_builds_command_dispatcher_and_dispatches_with_state_coming_from_snapshot_store(): void
+    {
+        $commandMap = [
+            'some_command' => [
+                'handler' => function (callable $stateResolver, Message $message): array {
+                    $stateResolver();
+
+                    return [new TestDomainEvent(['foo' => 'bar', 'id' => 'some_id'])];
+                },
+                'definition' => SingleStreamTestAggregateDefinition::class,
+            ],
+        ];
+
+        $eventStore = $this->prophesize(EventStore::class);
+        $eventStore->hasStream('foo')->willReturn(true)->shouldBeCalled();
+        $eventStore->load(Argument::type(StreamName::class), 5, null, null)->willReturn(new \ArrayIterator())->shouldBeCalled();
+        $eventStore->appendTo(Argument::type(StreamName::class), Argument::type(\Iterator::class))->shouldBeCalled();
+
+        $snapshotStore = new InMemorySnapshotStore();
+        $snapshotStore->save(new Snapshot('test', 'some_id', ['version' => 4], 4, new \DateTimeImmutable()));
+
+        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStore->reveal(), $commandMap, $snapshotStore);
+
+        $command = $this->prophesize(Message::class);
+        $command->messageName()->willReturn('some_command')->shouldBeCalled();
+
+        $validation = $dispatch($command->reveal());
+
+        if ($validation instanceof Failure) {
+            $this->fail($validation->toString());
+        }
+    }
+
+    /**
+     * @test
+     */
+    public function it_builds_command_dispatcher_and_dispatches_with_object_state_coming_from_snapshot_store(): void
+    {
+        $commandMap = [
+            'some_command' => [
+                'handler' => function (callable $stateResolver, Message $message): array {
+                    $stateResolver();
+
+                    return [new TestDomainEvent(['foo' => 'bar', 'id' => 'some_id'])];
+                },
+                'definition' => SingleStreamTestAggregateDefinition2::class,
+            ],
+        ];
+
+        $eventStore = $this->prophesize(EventStore::class);
+        $eventStore->hasStream('foo')->willReturn(true)->shouldBeCalled();
+        $eventStore->load(Argument::type(StreamName::class), 5, null, null)->willReturn(new \ArrayIterator())->shouldBeCalled();
+        $eventStore->appendTo(Argument::type(StreamName::class), Argument::type(\Iterator::class))->shouldBeCalled();
+
+        $snapshotStore = new InMemorySnapshotStore();
+        $snapshotStore->save(new Snapshot('test', 'some_id', new TestState(), 4, new \DateTimeImmutable()));
+
+        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStore->reveal(), $commandMap, $snapshotStore);
+
+        $command = $this->prophesize(Message::class);
+        $command->messageName()->willReturn('some_command')->shouldBeCalled();
+
+        $validation = $dispatch($command->reveal());
+
+        if ($validation instanceof Failure) {
+            $this->fail($validation->toString());
+        }
+    }
+
+    /**
+     * @test
+     */
+    public function it_builds_command_dispatcher_and_dispatches_without_object_state_coming_from_snapshot_store(): void
+    {
+        $commandMap = [
+            'some_command' => [
+                'handler' => function (callable $stateResolver, Message $message): array {
+                    $stateResolver();
+
+                    return [new TestDomainEvent(['foo' => 'bar', 'id' => 'some_id'])];
+                },
+                'definition' => SingleStreamTestAggregateDefinition2::class,
+            ],
+        ];
+
+        $eventStore = $this->prophesize(EventStore::class);
+        $eventStore->hasStream('foo')->willReturn(true)->shouldBeCalled();
+        $eventStore->load(Argument::type(StreamName::class), 1, null, null)->willReturn(new \ArrayIterator())->shouldBeCalled();
+        $eventStore->appendTo(Argument::type(StreamName::class), Argument::type(\Iterator::class))->shouldBeCalled();
+
+        $snapshotStore = new InMemorySnapshotStore();
+
+        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStore->reveal(), $commandMap, $snapshotStore);
+
+        $command = $this->prophesize(Message::class);
+        $command->messageName()->willReturn('some_command')->shouldBeCalled();
+
+        $validation = $dispatch($command->reveal());
+
+        if ($validation instanceof Failure) {
+            $this->fail($validation->toString());
+        }
+    }
+
+    /**
+     * @test
+     */
+    public function it_builds_command_dispatcher_and_throws_exception_when_invalid_state_returned(): void
+    {
+        $commandMap = [
+            'some_command' => [
+                'handler' => function (callable $stateResolver, Message $message): array {
+                    $stateResolver();
+
+                    return [new TestDomainEvent(['foo' => 'bar', 'id' => 'some_id'])];
+                },
+                'definition' => SingleStreamTestAggregateDefinition2::class,
+            ],
+        ];
+
+        $eventStore = $this->prophesize(EventStore::class);
+
+        $snapshotStore = new InMemorySnapshotStore();
+        $snapshotStore->save(new Snapshot('test', 'some_id', ['version' => 4], 4, new \DateTimeImmutable()));
+
+        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStore->reveal(), $commandMap, $snapshotStore);
+
+        $command = $this->prophesize(Message::class);
+        $command->messageName()->willReturn('some_command')->shouldBeCalled();
+
+        $validation = $dispatch($command->reveal());
+
+        if ($validation instanceof Failure) {
+            $this->assertEquals(
+                'Failure(UnexpectedValueException(State must be an instance of ProophTest\Micro\TestAsset\TestState or null according to aggregate definition))',
+                $validation->toString()
+            );
+        } else {
+            $this->fail('No exception thrown');
+        }
+    }
+
+    /**
+     * @test
+     */
+    public function it_builds_command_dispatcher_and_throws_exception_when_invalid_state_returned2(): void
+    {
+        $commandMap = [
+            'some_command' => [
+                'handler' => function (callable $stateResolver, Message $message): array {
+                    $stateResolver();
+
+                    return [new TestDomainEvent(['foo' => 'bar', 'id' => 'some_id'])];
+                },
+                'definition' => SingleStreamTestAggregateDefinition::class,
+            ],
+        ];
+
+        $eventStore = $this->prophesize(EventStore::class);
+
+        $snapshotStore = new InMemorySnapshotStore();
+        $snapshotStore->save(new Snapshot('test', 'some_id', new TestState(), 4, new \DateTimeImmutable()));
+
+        $dispatch = \Prooph\Micro\Kernel\buildCommandDispatcher($eventStore->reveal(), $commandMap, $snapshotStore);
+
+        $command = $this->prophesize(Message::class);
+        $command->messageName()->willReturn('some_command')->shouldBeCalled();
+
+        $validation = $dispatch($command->reveal());
+
+        if ($validation instanceof Failure) {
+            $this->assertEquals(
+                'Failure(UnexpectedValueException(State must be an array according to aggregate definition))',
+                $validation->toString()
+            );
+        } else {
+            $this->fail('No exception thrown');
         }
     }
 
@@ -110,11 +295,11 @@ class KernelTest extends TestCase
         $definition = $this->prophesize(AggregateDefinition::class);
         $definition->aggregateType()->willReturn('test')->shouldBeCalled();
         $definition->extractAggregateId($message)->willReturn('42')->shouldBeCalled();
+        $definition->stateType()->willReturn('array')->shouldBeCalled();
 
         $result = k\loadState($message, $definition->reveal(), $snapshotStore->reveal());
 
-        $this->assertInternalType('array', $result);
-        $this->assertEmpty($result);
+        $this->assertEquals([], $result);
     }
 
     /**
@@ -137,6 +322,7 @@ class KernelTest extends TestCase
         $definition = $this->prophesize(AggregateDefinition::class);
         $definition->aggregateType()->willReturn('test')->shouldBeCalled();
         $definition->extractAggregateId($message)->willReturn('42')->shouldBeCalled();
+        $definition->stateType()->willReturn('array')->shouldBeCalled();
 
         $result = k\loadState($message, $definition->reveal(), $snapshotStore);
         $this->assertEquals(['foo' => 'bar'], $result);
@@ -151,6 +337,7 @@ class KernelTest extends TestCase
         $message = $message->reveal();
 
         $definition = $this->prophesize(AggregateDefinition::class);
+        $definition->stateType()->willReturn('array')->shouldBeCalled();
 
         $result = k\loadState($message, $definition->reveal(), null);
         $this->assertEquals([], $result);

@@ -110,7 +110,7 @@ abstract class AbstractAggregateDefinition implements AggregateDefinition
         };
     }
 
-    public function reconstituteState(array $state, Iterator $events): array
+    public function reconstituteState($state, Iterator $events)
     {
         return $this->apply($state, ...$events);
     }
@@ -118,5 +118,10 @@ abstract class AbstractAggregateDefinition implements AggregateDefinition
     public function hasOneStreamPerAggregate(): bool
     {
         return false;
+    }
+
+    public function stateType(): string
+    {
+        return 'array';
     }
 }

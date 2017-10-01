@@ -170,7 +170,7 @@ class AbstractAggregateDefinitionTest extends TestCase
                 return 'foo';
             }
 
-            public function apply(array $state, Message ...$events): array
+            public function apply($state, Message ...$events): array
             {
                 if (! isset($state['count'])) {
                     $state['count'] = 0;
