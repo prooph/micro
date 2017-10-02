@@ -29,7 +29,7 @@ final class UserAggregateDefinition extends AbstractAggregateDefinition
         return new StreamName('user_stream');
     }
 
-    public function apply(array $state, Message ...$events): array
+    public function apply($state, Message ...$events)
     {
         return User\apply($state, ...$events);
     }

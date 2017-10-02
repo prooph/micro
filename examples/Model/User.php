@@ -45,8 +45,12 @@ function changeUserName(callable $stateResolver, ChangeUserName $command): array
 
 const apply = '\Prooph\MicroExample\Model\User\apply';
 
-function apply(array $state, Message ...$events): array
+function apply($state, Message ...$events): array
 {
+    if (null === $state) {
+        $state = [];
+    }
+
     foreach ($events as $event) {
         switch ($event->messageName()) {
             case UserWasRegistered::class:

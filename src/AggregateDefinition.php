@@ -28,7 +28,8 @@ interface AggregateDefinition
     public function identifierName(): string;
 
     /**
-     * Returns the key in message payload and state to identify version number
+     * Returns the key in message payload and state (array) to identify version number
+     * If state is an object, it represents the method name to call in order to receive the version
      */
     public function versionName(): string;
 
@@ -44,7 +45,9 @@ interface AggregateDefinition
 
     public function hasOneStreamPerAggregate(): bool;
 
-    public function reconstituteState(array $state, Iterator $events): array;
+    public function reconstituteState($state, Iterator $events);
 
-    public function apply(array $state, Message ...$events): array;
+    public function apply($state, Message ...$events);
+
+    public function stateType(): string;
 }

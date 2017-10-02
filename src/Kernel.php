@@ -64,10 +64,46 @@ function buildCommandDispatcher(
             return Failure($e);
         }
 
-        $stateResolver = function () use ($message, $definition, $eventStore, $snapshotStore, $aggregateId): array {
+        $stateResolver = function () use ($message, $definition, $eventStore, $snapshotStore, $aggregateId) {
             $state = loadState($message, $definition, $snapshotStore);
+            $stateType = $definition->stateType();
 
-            $nextVersion = empty($state) ? 1 : $state[$definition->versionName()] + 1;
+            if ('array' === $stateType && ! is_array($state)) {
+                throw new \UnexpectedValueException('State must be an array according to aggregate definition');
+            }
+
+            if ('array' !== $stateType && null !== $state && ! $state instanceof $stateType) {
+                throw new \UnexpectedValueException(sprintf(
+                    'State must be an instance of %s or null according to aggregate definition',
+                    $stateType
+                ));
+            }
+
+            switch (gettype($state)) {
+                case 'array':
+                    if (empty($state)) {
+                        $nextVersion = 1;
+                    } else {
+                        $versionKey = $definition->versionName();
+                        if (! array_key_exists($versionKey, $state)) {
+                            throw new RuntimeException(sprintf(
+                                'Missing aggregate version key "%s" in state. State was %s',
+                                $versionKey,
+                                $message->messageName(),
+                                json_encode($state)
+                            ));
+                        }
+                        $nextVersion = $state[$versionKey] + 1;
+                    }
+                    break;
+                case 'object':
+                    $nextVersion = $state->{$definition->versionName()}() + 1;
+                    break;
+                case 'NULL':
+                default:
+                    $nextVersion = 1;
+                    break;
+            }
 
             $events = loadEvents($eventStore, $definition, $aggregateId, $nextVersion);
 
@@ -119,16 +155,21 @@ function buildCommandDispatcher(
 
 const loadState = '\Prooph\Micro\Kernel\loadState';
 
-function loadState(Message $message, AggregateDefinition $definition, SnapshotStore $snapshotStore = null): array
+/**
+ * @return mixed
+ */
+function loadState(Message $message, AggregateDefinition $definition, SnapshotStore $snapshotStore = null)
 {
+    $arrayState = 'array' === $definition->stateType();
+
     if (null === $snapshotStore) {
-        return [];
+        return $arrayState ? [] : null;
     }
 
     $aggregate = $snapshotStore->get($definition->aggregateType(), $definition->extractAggregateId($message));
 
     if (! $aggregate) {
-        return [];
+        return $arrayState ? [] : null;
     }
 
     return $aggregate->aggregateRoot();
@@ -151,8 +192,6 @@ function loadEvents(
 
     if ($definition->hasOneStreamPerAggregate()) {
         $streamName = new StreamName($streamName->toString() . '-' . $aggregateId); // append aggregate id to stream name
-    } else {
-        $nextVersion = 1; // we don't know the event position, the metadata matcher will help, we start at 1
     }
 
     return $eventStore->load($streamName, $nextVersion, null, $metadataMatcher);

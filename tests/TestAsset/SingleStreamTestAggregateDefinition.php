@@ -61,12 +61,12 @@ final class SingleStreamTestAggregateDefinition implements AggregateDefinition
         return null;
     }
 
-    public function reconstituteState(array $state, Iterator $events): array
+    public function reconstituteState($state, Iterator $events)
     {
         return $state;
     }
 
-    public function apply(array $state, Message ...$events): array
+    public function apply($state, Message ...$events)
     {
         return [];
     }
@@ -74,5 +74,10 @@ final class SingleStreamTestAggregateDefinition implements AggregateDefinition
     public function hasOneStreamPerAggregate(): bool
     {
         return false;
+    }
+
+    public function stateType(): string
+    {
+        return 'array';
     }
 }
