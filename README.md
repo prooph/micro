@@ -26,7 +26,7 @@ php examples/user_snapshotter.php
 
 ## Support
 
-- Ask questions on [prooph-users](https://groups.google.com/forum/?hl=de#!forum/prooph) mailing list.
+- Ask questions on Stack Overflow tagged with [#prooph](https://stackoverflow.com/questions/tagged/prooph).
 - File issues at [https://github.com/prooph/micro/issues](https://github.com/prooph/micro/issues).
 - Say hello in the [prooph gitter](https://gitter.im/prooph/improoph) chat.
 
