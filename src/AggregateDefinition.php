@@ -28,8 +28,7 @@ interface AggregateDefinition
     public function identifierName(): string;
 
     /**
-     * Returns the key in message payload and state (array) to identify version number
-     * If state is an object, it represents the method name to call in order to receive the version
+     * Returns the key in message metadata to identify version number
      */
     public function versionName(): string;
 

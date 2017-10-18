@@ -23,6 +23,7 @@ use Prooph\EventStore\Stream;
 use Prooph\EventStore\StreamName;
 use Prooph\EventStore\TransactionalEventStore;
 use Prooph\Micro\AggregateDefinition;
+use Prooph\SnapshotStore\Snapshot;
 use Prooph\SnapshotStore\SnapshotStore;
 use RuntimeException;
 use function Phunkie\Functions\function1\compose;
@@ -64,48 +65,25 @@ function buildCommandDispatcher(
             return Failure($e);
         }
 
-        $stateResolver = function () use ($message, $definition, $eventStore, $snapshotStore, $aggregateId) {
-            $state = loadState($message, $definition, $snapshotStore);
-            $stateType = $definition->stateType();
+        $lastVersion = 0;
 
-            if ('array' === $stateType && ! is_array($state)) {
-                throw new \UnexpectedValueException('State must be an array according to aggregate definition');
-            }
+        $stateResolver = function () use ($message, $definition, $eventStore, $snapshotStore, $aggregateId, &$lastVersion) {
+            $snapshot = loadSnapshot($message, $definition, $snapshotStore);
 
-            if ('array' !== $stateType && null !== $state && ! $state instanceof $stateType) {
-                throw new \UnexpectedValueException(sprintf(
-                    'State must be an instance of %s or null according to aggregate definition',
-                    $stateType
-                ));
-            }
+            $nextVersion = 1;
+            $state = null;
 
-            switch (gettype($state)) {
-                case 'array':
-                    if (empty($state)) {
-                        $nextVersion = 1;
-                    } else {
-                        $versionKey = $definition->versionName();
-                        if (! array_key_exists($versionKey, $state)) {
-                            throw new RuntimeException(sprintf(
-                                'Missing aggregate version key "%s" in state. State was %s',
-                                $versionKey,
-                                $message->messageName(),
-                                json_encode($state)
-                            ));
-                        }
-                        $nextVersion = $state[$versionKey] + 1;
-                    }
-                    break;
-                case 'object':
-                    $nextVersion = $state->{$definition->versionName()}() + 1;
-                    break;
-                case 'NULL':
-                default:
-                    $nextVersion = 1;
-                    break;
+            if (null !== $snapshot) {
+                $nextVersion = $snapshot->lastVersion() + 1;
+                $state = $snapshot->aggregateRoot();
             }
 
             $events = loadEvents($eventStore, $definition, $aggregateId, $nextVersion);
+            $lastEvent = end($events);
+
+            if (false !== $lastEvent) {
+                $lastVersion = $definition->extractAggregateVersion($lastEvent);
+            }
 
             return $definition->reconstituteState($state, $events);
         };
@@ -122,8 +100,8 @@ function buildCommandDispatcher(
             return ImmList(...$events);
         };
 
-        $enrichEvents = function (ImmList $events) use ($message, $definition, $aggregateId): Kind {
-            $enricher = getEnricherFor($definition, $aggregateId, $message);
+        $enrichEvents = function (ImmList $events) use ($message, $definition, $aggregateId, &$lastVersion): Kind {
+            $enricher = getEnricherFor($definition, $aggregateId, $message, $lastVersion);
 
             return $events->map($enricher);
         };
@@ -153,26 +131,15 @@ function buildCommandDispatcher(
     };
 }
 
-const loadState = '\Prooph\Micro\Kernel\loadState';
+const loadSnapshot = '\Prooph\Micro\Kernel\loadSnapshot';
 
-/**
- * @return mixed
- */
-function loadState(Message $message, AggregateDefinition $definition, SnapshotStore $snapshotStore = null)
+function loadSnapshot(Message $message, AggregateDefinition $definition, SnapshotStore $snapshotStore = null): ?Snapshot
 {
-    $arrayState = 'array' === $definition->stateType();
-
     if (null === $snapshotStore) {
-        return $arrayState ? [] : null;
+        return null;
     }
 
-    $aggregate = $snapshotStore->get($definition->aggregateType(), $definition->extractAggregateId($message));
-
-    if (! $aggregate) {
-        return $arrayState ? [] : null;
-    }
-
-    return $aggregate->aggregateRoot();
+    return $snapshotStore->get($definition->aggregateType(), $definition->extractAggregateId($message));
 }
 
 const loadEvents = '\Prooph\Micro\Kernel\loadEvents';
@@ -191,7 +158,8 @@ function loadEvents(
     }
 
     if ($definition->hasOneStreamPerAggregate()) {
-        $streamName = new StreamName($streamName->toString() . '-' . $aggregateId); // append aggregate id to stream name
+        // append aggregate id to stream name
+        $streamName = new StreamName($streamName->toString() . '-' . $aggregateId);
     }
 
     return $eventStore->load($streamName, $nextVersion, null, $metadataMatcher);
@@ -199,11 +167,10 @@ function loadEvents(
 
 const getEnricherFor = '\Prooph\Micro\Kernel\getEnricherFor';
 
-function getEnricherFor(AggregateDefinition $definition, string $aggregateId, Message $message): callable
+function getEnricherFor(AggregateDefinition $definition, string $aggregateId, Message $message, int &$lastVersion): callable
 {
-    return function (Message $event) use ($definition, $aggregateId, $message): Message {
-        $aggregateVersion = $definition->extractAggregateVersion($event);
-        $metadataEnricher = $definition->metadataEnricher($aggregateId, $aggregateVersion, $message);
+    return function (Message $event) use ($definition, $aggregateId, $message, &$lastVersion): Message {
+        $metadataEnricher = $definition->metadataEnricher($aggregateId, ++$lastVersion, $message);
 
         if (null !== $metadataEnricher) {
             $event = $metadataEnricher->enrich($event);
