@@ -26,10 +26,10 @@ const registerUser = '\Prooph\MicroExample\Model\User\registerUser';
 function registerUser(callable $stateResolver, RegisterUser $command, UniqueEmailGuard $guard): array
 {
     if ($guard->isUnique($command->email())) {
-        return [new UserWasRegistered(array_merge($command->payload(), ['version' => 1]))];
+        return [new UserWasRegistered($command->payload())];
     }
 
-    return [new UserWasRegisteredWithDuplicateEmail(array_merge($command->payload(), ['version' => ++$stateResolver()['version']]))];
+    return [new UserWasRegisteredWithDuplicateEmail($command->payload())];
 }
 
 const changeUserName = '\Prooph\MicroExample\Model\User\changeUserName';
@@ -40,7 +40,7 @@ function changeUserName(callable $stateResolver, ChangeUserName $command): array
         throw new InvalidArgumentException('Username too short');
     }
 
-    return [new UserNameWasChanged(array_merge($command->payload(), ['version' => ++$stateResolver()['version']]))];
+    return [new UserNameWasChanged($command->payload())];
 }
 
 const apply = '\Prooph\MicroExample\Model\User\apply';

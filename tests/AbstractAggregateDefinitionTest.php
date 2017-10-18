@@ -62,7 +62,7 @@ class AbstractAggregateDefinitionTest extends TestCase
     public function it_extracts_aggregate_version(): void
     {
         $message = $this->prophesize(Message::class);
-        $message->payload()->willReturn(['version' => 5])->shouldBeCalled();
+        $message->metadata()->willReturn(['version' => 5])->shouldBeCalled();
 
         $this->assertEquals(5, $this->createDefinition()->extractAggregateVersion($message->reveal()));
     }
@@ -75,7 +75,7 @@ class AbstractAggregateDefinitionTest extends TestCase
         $this->expectException(\RuntimeException::class);
 
         $message = $this->prophesize(Message::class);
-        $message->payload()->willReturn([])->shouldBeCalled();
+        $message->metadata()->willReturn([])->shouldBeCalled();
 
         $this->createDefinition()->extractAggregateVersion($message->reveal());
     }
