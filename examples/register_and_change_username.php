@@ -21,7 +21,6 @@ use Prooph\MicroExample\Model\Command\InvalidCommand;
 use Prooph\MicroExample\Model\Command\RegisterUser;
 use Prooph\MicroExample\Model\Command\UnknownCommand;
 use Prooph\MicroExample\Model\User;
-use function Phunkie\Functions\show\show;
 
 $start = microtime(true);
 
