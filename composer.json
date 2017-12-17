@@ -22,15 +22,15 @@
         "prooph"
     ],
     "require": {
-        "prooph/event-store": "^7.2",
-        "prooph/pdo-event-store": "^1.4.1",
+        "prooph/event-store": "^7.3.1",
+        "prooph/pdo-event-store": "^1.6",
         "prooph/snapshot-store": "^1.2",
         "phunkie/phunkie": "0.10.1"
     },
     "require-dev": {
         "phpunit/phpunit": "^6.0",
         "phpspec/prophecy": "^1.7",
-        "prooph/php-cs-fixer-config": "^0.1.1",
+        "prooph/php-cs-fixer-config": "^0.2.1",
         "satooshi/php-coveralls": "^1.0",
         "malukenho/docheader": "^0.1.4"
     },
