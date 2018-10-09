@@ -22,6 +22,7 @@
         "prooph"
     ],
     "require": {
+        "php": "^7.1",
         "prooph/event-store": "^7.3.1",
         "prooph/pdo-event-store": "^1.6",
         "prooph/snapshot-store": "^1.2",
@@ -31,7 +32,7 @@
         "phpunit/phpunit": "^6.0",
         "phpspec/prophecy": "^1.7",
         "prooph/php-cs-fixer-config": "^0.2.1",
-        "satooshi/php-coveralls": "^1.0",
+        "php-coveralls/php-coveralls": "^2.1",
         "malukenho/docheader": "^0.1.4"
     },
     "suggest": {
