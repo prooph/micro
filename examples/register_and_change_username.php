@@ -14,7 +14,6 @@ declare(strict_types=1);
 namespace Prooph\MicroExample\Script;
 
 use Amp\Loop;
-use Amp\Promise;
 use Phunkie\Validation\Validation;
 use Prooph\EventStore\UserCredentials;
 use Prooph\EventStore\Util\Guid;
@@ -72,10 +71,8 @@ Loop::run(function (): \Generator {
     $uniqueEmailGuard = new InMemoryEmailGuard();
 
     $commandMap = ImmMap([
-        ChangeUserName::class => fn (ChangeUserName $m) => new UserSpecification($m, User\changeUserName),
-        RegisterUser::class => fn (RegisterUser $m) => new UserSpecification($m, function (callable $stateResolver, $message) use ($uniqueEmailGuard): Promise {
-            return User\registerUser($stateResolver, $message, $uniqueEmailGuard);
-        }),
+        ChangeUserName::class => fn ($m) => new UserSpecification($m, User\changeUserName),
+        RegisterUser::class => fn ($m) => new UserSpecification($m, fn (callable $s, $m) => User\registerUser($s, $m, $uniqueEmailGuard)),
     ]);
 
     $dispatch = Kernel\buildCommandDispatcher($connection, $commandMap);
