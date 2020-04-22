@@ -77,13 +77,10 @@ function stateResolver(EventStoreConnection $eventStore, CommandSpecification $s
             switch ($slice->status()->value()) {
                 case SliceReadStatus::SUCCESS:
                     return $specification->reconstituteFromHistory(ImmList(...$slice->events()));
-                    break;
                 case SliceReadStatus::STREAM_NOT_FOUND:
                     throw new \RuntimeException('Stream not found');
-                    break;
                 case SliceReadStatus::STREAM_DELETED:
                     throw new \RuntimeException('Stream deleted');
-                    break;
             }
         });
     };
