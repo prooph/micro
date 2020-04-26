@@ -26,14 +26,14 @@ describe('Prooph Micro', function () {
         describe('Command Handling', function () {
             it('can handle incoming commands', function () {
                 $command = new \stdClass();
-                $handler = fn ($s, $m) => new Success('foo');
+                $handler = fn ($s, $m) => yield 'foo';
 
                 $spec = Double::instance([
                     'extends' => CommandSpecification::class,
                     'args' => [$command, $handler],
                 ]);
 
-                expect($spec->handle(fn () => []))->toEqual(new Success('foo'));
+                expect($spec->handle(fn () => []))->toBeAnInstanceOf(\Generator::class);
             });
         });
 

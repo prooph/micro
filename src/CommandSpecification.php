@@ -13,8 +13,8 @@ declare(strict_types=1);
 
 namespace Prooph\Micro;
 
-use Amp\Promise;
 use Closure;
+use Generator;
 use Phunkie\Types\ImmList;
 use Prooph\EventStore\EventData;
 use Prooph\EventStore\ExpectedVersion;
@@ -31,7 +31,7 @@ abstract class CommandSpecification
         $this->handler = Closure::fromCallable($handler);
     }
 
-    public function handle(Closure $stateResolver): Promise
+    public function handle(Closure $stateResolver): Generator
     {
         return ($this->handler)($stateResolver, $this->command);
     }

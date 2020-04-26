@@ -69,10 +69,11 @@ describe('Prooph Micro', function () {
 
                 allow($connection)->toReceive('readStreamEventsForwardAsync')->andReturn(new Success($slice));
 
+                allow($slice)->toReceive('isEndOfStream')->andReturn(true);
                 allow($slice)->toReceive('status')->andReturn(SliceReadStatus::success());
                 allow($slice)->toReceive('events')->andReturn([$re1, $re2, $re3]);
 
-                expect(wait(stateResolver($connection, $spec)()))->toBe(6);
+                expect(wait(stateResolver($connection, $spec, 5)()))->toBe(6);
             });
 
             it('will throw, when stream not found', function () {
@@ -97,7 +98,7 @@ describe('Prooph Micro', function () {
                 allow($connection)->toReceive('readStreamEventsForwardAsync')->andReturn(new Success($slice));
                 allow($slice)->toReceive('status')->andReturn(SliceReadStatus::streamNotFound());
 
-                $closure = fn () => wait(stateResolver($connection, $spec)());
+                $closure = fn () => wait(stateResolver($connection, $spec, 5)());
 
                 expect($closure)->toThrow(new \RuntimeException('Stream not found'));
             });
@@ -124,7 +125,7 @@ describe('Prooph Micro', function () {
                 allow($connection)->toReceive('readStreamEventsForwardAsync')->andReturn(new Success($slice));
                 allow($slice)->toReceive('status')->andReturn(SliceReadStatus::streamDeleted());
 
-                $closure = fn () => wait(stateResolver($connection, $spec)());
+                $closure = fn () => wait(stateResolver($connection, $spec, 5)());
 
                 expect($closure)->toThrow(new \RuntimeException('Stream deleted'));
             });
@@ -137,7 +138,7 @@ describe('Prooph Micro', function () {
                     $event = new \stdClass();
                     $event->v = 'foo';
 
-                    return new Success(ImmList($event));
+                    yield $event;
                 };
 
                 $spec = Double::instance([

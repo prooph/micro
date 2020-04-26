@@ -13,7 +13,12 @@ declare(strict_types=1);
 
 namespace Prooph\MicroExample\Model;
 
+use Amp\Promise;
+
 interface UniqueEmailGuard
 {
-    public function isUnique(string $email): bool;
+    /**
+     * @return Promise<bool>
+     */
+    public function isUnique(string $email): Promise;
 }

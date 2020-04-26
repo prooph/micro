@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Prooph\Micro\Kernel;
 
 use function Amp\call;
+use Amp\Producer;
 use Amp\Promise;
 use Closure;
 use function Failure;
@@ -29,10 +30,11 @@ const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
 
 function buildCommandDispatcher(
     EventStoreConnection $eventStore,
-    ImmMap $commandMap
+    ImmMap $commandMap,
+    int $readBatchSize = 200
 ): callable {
-    return function (object $m) use ($eventStore, $commandMap): Promise {
-        return call(function () use ($m, $eventStore, $commandMap): Generator {
+    return function (object $m) use ($eventStore, $commandMap, $readBatchSize): Promise {
+        return call(function () use ($m, $eventStore, $commandMap, $readBatchSize): Generator {
             $messageClass = \get_class($m);
             $config = $commandMap->get($messageClass);
 
@@ -44,44 +46,66 @@ function buildCommandDispatcher(
             \assert($specification instanceof CommandSpecification);
 
             try {
-                $es = yield $specification->handle(stateResolver($eventStore, $specification));
+                $iterator = new Producer(function (callable $emit) use ($eventStore, $specification, $readBatchSize): Generator {
+                    foreach ($specification->handle(stateResolver($eventStore, $specification, $readBatchSize)) as $eventOrPromise) {
+                        if ($eventOrPromise instanceof Promise) {
+                            yield $eventOrPromise;
+                        } else {
+                            yield $emit($eventOrPromise);
+                        }
+                    }
+                });
+
+                $events = [];
+                $eventData = [];
+
+                while (yield $iterator->advance()) {
+                    $event = $iterator->getCurrent();
+                    $events[] = $event;
+                    $eventData[] = $specification->mapToEventData($event);
+                }
 
                 yield $eventStore->appendToStreamAsync(
                     $specification->streamName(),
                     $specification->expectedVersion(),
-                    $es->map(fn ($e) => $specification->mapToEventData($e))->toArray()
+                    $eventData
                 );
             } catch (\Throwable $e) {
                 return Failure($e);
             }
 
-            return Success($es);
+            return Success(ImmList(...$events));
         });
     };
 }
 
 const stateResolver = 'Prooph\Micro\Kernel\stateResolver';
 
-function stateResolver(EventStoreConnection $eventStore, CommandSpecification $specification): Closure
+function stateResolver(EventStoreConnection $eventStore, CommandSpecification $specification, int $readBatchSize): Closure
 {
-    return function () use ($eventStore, $specification): Promise {
-        return call(function () use ($eventStore, $specification): Generator {
-            $slice = yield $eventStore->readStreamEventsForwardAsync(
-                $specification->streamName(),
-                0,
-                4096,
-            );
+    return function () use ($eventStore, $specification, $readBatchSize): Promise {
+        return call(function () use ($eventStore, $specification, $readBatchSize): Generator {
+            $events = [];
 
-            \assert($slice instanceof StreamEventsSlice);
+            do {
+                $slice = yield $eventStore->readStreamEventsForwardAsync(
+                    $specification->streamName(),
+                    0,
+                    $readBatchSize,
+                );
+                \assert($slice instanceof StreamEventsSlice);
 
-            switch ($slice->status()->value()) {
-                case SliceReadStatus::SUCCESS:
-                    return $specification->reconstituteFromHistory(ImmList(...$slice->events()));
-                case SliceReadStatus::STREAM_NOT_FOUND:
-                    throw new \RuntimeException('Stream not found');
-                case SliceReadStatus::STREAM_DELETED:
-                    throw new \RuntimeException('Stream deleted');
-            }
+                switch ($slice->status()->value()) {
+                    case SliceReadStatus::STREAM_NOT_FOUND:
+                        throw new \RuntimeException('Stream not found');
+                    case SliceReadStatus::STREAM_DELETED:
+                        throw new \RuntimeException('Stream deleted');
+                }
+
+                $events = \array_merge($events, $slice->events());
+            } while (! $slice->isEndOfStream() && \count($slice->events()) === $readBatchSize);
+
+            return $specification->reconstituteFromHistory(ImmList(...$events));
         });
     };
 }
