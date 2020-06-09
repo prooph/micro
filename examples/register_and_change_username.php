@@ -1,8 +1,9 @@
 <?php
+
 /**
  * This file is part of the prooph/micro.
- * (c) 2017-2017 prooph software GmbH <contact@prooph.de>
- * (c) 2017-2017 Sascha-Oliver Prolic <saschaprolic@googlemail.com>
+ * (c) 2017-2020 prooph software GmbH <contact@prooph.de>
+ * (c) 2017-2020 Sascha-Oliver Prolic <saschaprolic@googlemail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -12,69 +13,95 @@ declare(strict_types=1);
 
 namespace Prooph\MicroExample\Script;
 
-use Phunkie\Validation\Validation;
-use Prooph\Common\Messaging\Message;
+use Amp\Loop;
+use const PHP_EOL;
+use Phunkie\Types\ImmList;
+use Prooph\EventStore\UserCredentials;
+use Prooph\EventStore\Util\Guid;
+use Prooph\EventStoreClient\ConnectionSettings;
+use Prooph\EventStoreClient\EventStoreConnectionFactory;
 use Prooph\Micro\Kernel;
-use Prooph\MicroExample\Infrastructure\UserAggregateDefinition;
+use Prooph\MicroExample\Infrastructure\InMemoryEmailGuard;
+use Prooph\MicroExample\Infrastructure\UserSpecification;
 use Prooph\MicroExample\Model\Command\ChangeUserName;
-use Prooph\MicroExample\Model\Command\InvalidCommand;
 use Prooph\MicroExample\Model\Command\RegisterUser;
 use Prooph\MicroExample\Model\Command\UnknownCommand;
 use Prooph\MicroExample\Model\User;
-
-$start = microtime(true);
+use Throwable;
 
 $autoloader = require __DIR__ . '/../vendor/autoload.php';
 $autoloader->addPsr4('Prooph\\MicroExample\\', __DIR__);
 require 'Model/User.php';
 
-//We could also use a container here, if dependencies grow
-$factories = include 'Infrastructure/factories.php';
-
-$commandMap = [
-    RegisterUser::class => [
-        'handler' => function (callable $stateResolver, Message $message) use (&$factories): array {
-            return User\registerUser($stateResolver, $message, $factories['emailGuard']());
-        },
-        'definition' => UserAggregateDefinition::class,
-    ],
-    ChangeUserName::class => [
-        'handler' => User\changeUserName,
-        'definition' => UserAggregateDefinition::class,
-    ],
-];
-
-function showResult(Validation $result): void
+function showResult($result): void
 {
-    $on = match($result);
-    switch (true) {
-        case $on(Success(_)):
-            echo $result->show() . PHP_EOL;
-            echo json_encode($result->getOrElse('')->head()->payload()) . PHP_EOL . PHP_EOL;
-            break;
-        case $on(Failure(_)):
-            echo $result->show() . PHP_EOL . PHP_EOL;
-            break;
+    if ($result instanceof ImmList) {
+        echo $result->show() . PHP_EOL;
+        echo \json_encode($result->head()->payload()) . PHP_EOL . PHP_EOL;
     }
 }
 
-$dispatch = Kernel\buildCommandDispatcher($factories['eventStore'](), $commandMap, $factories['snapshotStore']());
+Loop::run(function (): \Generator {
+    $start = \microtime(true);
 
-/* @var Validation $result */
-$result = $dispatch(new RegisterUser(['id' => '1', 'name' => 'Alex', 'email' => 'member@getprooph.org']));
-showResult($result);
+    $settings = ConnectionSettings::create()
+        ->setDefaultUserCredentials(
+            new UserCredentials('admin', 'changeit')
+        );
 
-$result = $dispatch(new ChangeUserName(['id' => '1', 'name' => 'Sascha']));
-showResult($result);
+    $connection = EventStoreConnectionFactory::createFromConnectionString(
+        'ConnectTo=tcp://admin:changeit@10.121.1.4:1113',
+        $settings->build()
+    );
 
-// a TypeError
-$result = $dispatch(new InvalidCommand());
-showResult($result);
+    $connection->onConnected(function () {
+        echo 'Event Store connection established' . PHP_EOL;
+    });
 
-// unknown command
-$result = $dispatch(new UnknownCommand());
-showResult($result);
+    $connection->onClosed(function () {
+        echo 'Event Store connection closed' . PHP_EOL;
+    });
 
-$time = microtime(true) - $start;
+    yield $connection->connectAsync();
 
-echo $time . "secs runtime\n\n";
+    $uniqueEmailGuard = new InMemoryEmailGuard();
+
+    $commandMap = ImmMap([
+        ChangeUserName::class => fn ($m) => new UserSpecification($m, User\changeUserName),
+        RegisterUser::class => fn ($m) => new UserSpecification($m, fn (callable $s, $m) => User\registerUser($s, $m, $uniqueEmailGuard)),
+    ]);
+
+    $dispatch = Kernel\buildCommandDispatcher($connection, $commandMap);
+
+    $userId = Guid::generateString();
+
+    try {
+        $result = yield $dispatch(new RegisterUser(['id' => $userId, 'name' => 'Alex', 'email' => 'member@getprooph.org']));
+    } catch (Throwable $e) {
+        echo \get_class($e) . ': ' . $e->getMessage() . PHP_EOL . PHP_EOL;
+    }
+
+    showResult($result);
+
+    try {
+        $result = yield $dispatch(new ChangeUserName(['id' => $userId, 'name' => 'Sascha']));
+    } catch (Throwable $e) {
+        echo \get_class($e) . ': ' . $e->getMessage() . PHP_EOL . PHP_EOL;
+    }
+
+    showResult($result);
+
+    try {
+        $result = yield $dispatch(new UnknownCommand());
+    } catch (Throwable $e) {
+        echo \get_class($e) . ': ' . $e->getMessage() . PHP_EOL . PHP_EOL;
+    }
+
+    showResult($result);
+
+    $time = \microtime(true) - $start;
+
+    echo $time . "secs runtime\n\n";
+
+    $connection->close();
+});

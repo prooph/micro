@@ -11,9 +11,9 @@
 
 declare(strict_types=1);
 
-namespace Prooph\MicroExample\Model\Command;
+namespace Prooph\MicroExample\Model\Event;
 
-final class RegisterUser
+final class UserRegisteredWithDuplicateEmail
 {
     protected array $payload;
 
@@ -24,7 +24,7 @@ final class RegisterUser
 
     public function messageName(): string
     {
-        return 'register-user';
+        return 'user-registered-with-duplicate-email';
     }
 
     public function payload(): array
