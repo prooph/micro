@@ -17,14 +17,13 @@ use function Amp\call;
 use Amp\Producer;
 use Amp\Promise;
 use Closure;
-use function Failure;
 use Generator;
 use Phunkie\Types\ImmMap;
 use Prooph\EventStore\Async\EventStoreConnection;
 use Prooph\EventStore\SliceReadStatus;
 use Prooph\EventStore\StreamEventsSlice;
 use Prooph\Micro\CommandSpecification;
-use function Success;
+use RuntimeException;
 
 const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
 
@@ -39,42 +38,46 @@ function buildCommandDispatcher(
             $config = $commandMap->get($messageClass);
 
             if ($config->isEmpty()) {
-                return Failure('No configuration found for ' . $messageClass);
+                throw new RuntimeException(
+                    'No configuration found for ' . $messageClass
+                );
             }
 
             $specification = $config->get()($m);
             \assert($specification instanceof CommandSpecification);
 
-            try {
-                $iterator = new Producer(function (callable $emit) use ($eventStore, $specification, $readBatchSize): Generator {
-                    foreach ($specification->handle(stateResolver($eventStore, $specification, $readBatchSize)) as $eventOrPromise) {
-                        if ($eventOrPromise instanceof Promise) {
-                            yield $eventOrPromise;
-                        } else {
-                            yield $emit($eventOrPromise);
-                        }
+            $iterator = new Producer(function (callable $emit) use ($eventStore, $specification, $readBatchSize): Generator {
+                $generator = $specification->handle(stateResolver($eventStore, $specification, $readBatchSize));
+
+                while ($generator->valid()) {
+                    $eventOrPromise = $generator->current();
+
+                    if ($eventOrPromise instanceof Promise) {
+                        $generator->send(yield $eventOrPromise);
+                    } else {
+                        yield $emit($eventOrPromise);
+                        $generator->next();
                     }
-                });
-
-                $events = [];
-                $eventData = [];
-
-                while (yield $iterator->advance()) {
-                    $event = $iterator->getCurrent();
-                    $events[] = $event;
-                    $eventData[] = $specification->mapToEventData($event);
                 }
+            });
 
-                yield $eventStore->appendToStreamAsync(
-                    $specification->streamName(),
-                    $specification->expectedVersion(),
-                    $eventData
-                );
-            } catch (\Throwable $e) {
-                return Failure($e);
+            $events = [];
+            $eventData = [];
+
+            while (yield $iterator->advance()) {
+                $event = $iterator->getCurrent();
+
+                $events[] = $event;
+                $eventData[] = $specification->mapToEventData($event);
             }
 
-            return Success(ImmList(...$events));
+            yield $eventStore->appendToStreamAsync(
+                $specification->streamName(),
+                $specification->expectedVersion(),
+                $eventData
+            );
+
+            return ImmList(...$events);
         });
     };
 }

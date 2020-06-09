@@ -15,10 +15,9 @@ namespace ProophTest\Micro;
 
 use function Amp\Promise\wait;
 use Amp\Success;
+use function expect;
 use Kahlan\Plugin\Double;
 use Phunkie\Types\ImmList;
-use Phunkie\Validation\Failure;
-use Phunkie\Validation\Success as ValidationSuccess;
 use Prooph\EventStore\Async\EventStoreConnection;
 use Prooph\EventStore\EventData;
 use Prooph\EventStore\EventId;
@@ -29,6 +28,7 @@ use Prooph\EventStore\StreamEventsSlice;
 use Prooph\Micro\CommandSpecification;
 use function Prooph\Micro\Kernel\buildCommandDispatcher;
 use function Prooph\Micro\Kernel\stateResolver;
+use RuntimeException;
 
 describe('Prooph Micro', function () {
     context('Kernel', function () {
@@ -174,10 +174,8 @@ describe('Prooph Micro', function () {
                 $expectedEvent = new \stdClass();
                 $expectedEvent->v = 'foo';
 
-                expect($result)->toBeAnInstanceOf(ValidationSuccess::class);
-                $list = $result->getOrElse(null);
-                expect($list)->toBeAnInstanceOf(ImmList::class);
-                expect($list->head())->toEqual($expectedEvent);
+                expect($result)->toBeAnInstanceOf(ImmList::class);
+                expect($result->head())->toEqual($expectedEvent);
             });
 
             it('returns failure when no specification found for a given command', function () {
@@ -189,8 +187,11 @@ describe('Prooph Micro', function () {
                 ]);
 
                 $dispatch = buildCommandDispatcher($connection, $map);
+                $syncedDispatch = fn () => wait($dispatch($command));
 
-                expect(wait($dispatch($command)))->toBeAnInstanceOf(Failure::class);
+                expect($syncedDispatch)->toThrow(
+                    new RuntimeException('No configuration found for stdClass')
+                );
             });
 
             it('returns failure when command handler throws', function () {
@@ -239,8 +240,9 @@ describe('Prooph Micro', function () {
                 allow($slice)->toReceive('events')->andReturn([$re1, $re2, $re3]);
 
                 $dispatch = buildCommandDispatcher($connection, $map);
+                $syncedDispatch = fn () => wait($dispatch($command));
 
-                expect(wait($dispatch($command)))->toBeAnInstanceOf(Failure::class);
+                expect($syncedDispatch)->toThrow(new RuntimeException('Boom!'));
             });
         });
     });
