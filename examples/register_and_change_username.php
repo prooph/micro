@@ -14,7 +14,8 @@ declare(strict_types=1);
 namespace Prooph\MicroExample\Script;
 
 use Amp\Loop;
-use Phunkie\Validation\Validation;
+use const PHP_EOL;
+use Phunkie\Types\ImmList;
 use Prooph\EventStore\UserCredentials;
 use Prooph\EventStore\Util\Guid;
 use Prooph\EventStoreClient\ConnectionSettings;
@@ -26,22 +27,17 @@ use Prooph\MicroExample\Model\Command\ChangeUserName;
 use Prooph\MicroExample\Model\Command\RegisterUser;
 use Prooph\MicroExample\Model\Command\UnknownCommand;
 use Prooph\MicroExample\Model\User;
+use Throwable;
 
 $autoloader = require __DIR__ . '/../vendor/autoload.php';
 $autoloader->addPsr4('Prooph\\MicroExample\\', __DIR__);
 require 'Model/User.php';
 
-function showResult(Validation $result): void
+function showResult($result): void
 {
-    $on = match($result);
-    switch (true) {
-        case $on(Success(_)):
-            echo $result->show() . PHP_EOL;
-            echo \json_encode($result->getOrElse('')->head()->payload()) . PHP_EOL . PHP_EOL;
-            break;
-        case $on(Failure(_)):
-            echo $result->show() . PHP_EOL . PHP_EOL;
-            break;
+    if ($result instanceof ImmList) {
+        echo $result->show() . PHP_EOL;
+        echo \json_encode($result->head()->payload()) . PHP_EOL . PHP_EOL;
     }
 }
 
@@ -54,7 +50,7 @@ Loop::run(function (): \Generator {
         );
 
     $connection = EventStoreConnectionFactory::createFromConnectionString(
-        'ConnectTo=tcp://admin:changeit@localhost:1113',
+        'ConnectTo=tcp://admin:changeit@10.121.1.4:1113',
         $settings->build()
     );
 
@@ -79,15 +75,28 @@ Loop::run(function (): \Generator {
 
     $userId = Guid::generateString();
 
-    /* @var Validation $result */
-    $result = yield $dispatch(new RegisterUser(['id' => $userId, 'name' => 'Alex', 'email' => 'member@getprooph.org']));
+    try {
+        $result = yield $dispatch(new RegisterUser(['id' => $userId, 'name' => 'Alex', 'email' => 'member@getprooph.org']));
+    } catch (Throwable $e) {
+        echo \get_class($e) . ': ' . $e->getMessage() . PHP_EOL . PHP_EOL;
+    }
+
     showResult($result);
 
-    $result = yield $dispatch(new ChangeUserName(['id' => $userId, 'name' => 'Sascha']));
+    try {
+        $result = yield $dispatch(new ChangeUserName(['id' => $userId, 'name' => 'Sascha']));
+    } catch (Throwable $e) {
+        echo \get_class($e) . ': ' . $e->getMessage() . PHP_EOL . PHP_EOL;
+    }
+
     showResult($result);
 
-    // unknown command
-    $result = yield $dispatch(new UnknownCommand());
+    try {
+        $result = yield $dispatch(new UnknownCommand());
+    } catch (Throwable $e) {
+        echo \get_class($e) . ': ' . $e->getMessage() . PHP_EOL . PHP_EOL;
+    }
+
     showResult($result);
 
     $time = \microtime(true) - $start;
