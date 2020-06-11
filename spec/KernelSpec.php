@@ -28,6 +28,7 @@ use Prooph\EventStore\StreamEventsSlice;
 use Prooph\Micro\CommandSpecification;
 use function Prooph\Micro\Kernel\buildCommandDispatcher;
 use function Prooph\Micro\Kernel\stateResolver;
+use Prooph\Micro\NotFound;
 use RuntimeException;
 
 describe('Prooph Micro', function () {
@@ -100,7 +101,7 @@ describe('Prooph Micro', function () {
 
                 $closure = fn () => wait(stateResolver($connection, $spec, 5)());
 
-                expect($closure)->toThrow(new \RuntimeException('Stream not found'));
+                expect($closure)->toThrow(new NotFound('Stream not found'));
             });
 
             it('will throw, when stream deleted', function () {
@@ -127,7 +128,7 @@ describe('Prooph Micro', function () {
 
                 $closure = fn () => wait(stateResolver($connection, $spec, 5)());
 
-                expect($closure)->toThrow(new \RuntimeException('Stream deleted'));
+                expect($closure)->toThrow(new NotFound('Stream deleted'));
             });
         });
 

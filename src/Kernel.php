@@ -23,6 +23,7 @@ use Prooph\EventStore\Async\EventStoreConnection;
 use Prooph\EventStore\SliceReadStatus;
 use Prooph\EventStore\StreamEventsSlice;
 use Prooph\Micro\CommandSpecification;
+use Prooph\Micro\NotFound;
 use RuntimeException;
 
 const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
@@ -100,9 +101,9 @@ function stateResolver(EventStoreConnection $eventStore, CommandSpecification $s
 
                 switch ($slice->status()->value()) {
                     case SliceReadStatus::STREAM_NOT_FOUND:
-                        throw new \RuntimeException('Stream not found');
+                        throw new NotFound('Stream not found');
                     case SliceReadStatus::STREAM_DELETED:
-                        throw new \RuntimeException('Stream deleted');
+                        throw new NotFound('Stream deleted');
                 }
 
                 $events = \array_merge($events, $slice->events());
