@@ -50,7 +50,10 @@ abstract class CommandSpecification
         return ExpectedVersion::ANY;
     }
 
-    abstract public function enrich(object $event, callable $enrich): object;
+    public function enrich(object $event, callable $enrich): object
+    {
+        return $enrich($event);
+    }
 
     abstract public function mapToEventData(object $event): EventData;
 
