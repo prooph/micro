@@ -71,7 +71,7 @@ Loop::run(function (): \Generator {
         RegisterUser::class => fn ($m) => new UserSpecification($m, fn (callable $s, $m) => User\registerUser($s, $m, $uniqueEmailGuard)),
     ]);
 
-    $dispatch = Kernel\buildCommandDispatcher($connection, $commandMap);
+    $dispatch = Kernel\buildCommandDispatcher($connection, $commandMap, fn (object  $e) => $e);
 
     $userId = Guid::generateString();
 
