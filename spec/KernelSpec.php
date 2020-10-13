@@ -135,16 +135,16 @@ describe('Prooph Micro', function () {
         describe('when executing the command dispatcher', function () {
             it('will execute the command handler successfully', function () {
                 $command = new \stdClass();
-                $handler = function ($s, $m) {
-                    $event = new \stdClass();
-                    $event->v = 'foo';
-
+                $event = new \stdClass();
+                $event->v = 'foo';
+                $handler = function ($s, $m) use ($event) {
                     yield $event;
                 };
+                $enrich = fn ($e) => $e;
 
                 $spec = Double::instance([
                     'extends' => CommandSpecification::class,
-                    'args' => [$command, $handler],
+                    'args' => [$command, $handler, $enrich],
                 ]);
 
                 $map = ImmMap([
@@ -156,6 +156,7 @@ describe('Prooph Micro', function () {
                 ]);
 
                 allow($spec)->toReceive('streamName')->andReturn('test-stream');
+                allow($spec)->toReceive('enrich')->andReturn($event);
                 allow($spec)->toReceive('mapToEventData')->andRun(function (object $e): object {
                     return new EventData(
                         null,
@@ -168,7 +169,7 @@ describe('Prooph Micro', function () {
 
                 allow($connection)->toReceive('appendToStreamAsync')->andRun(fn () => new Success());
 
-                $dispatch = buildCommandDispatcher($connection, $map);
+                $dispatch = buildCommandDispatcher($connection, $map, fn ($e) => $e);
 
                 $result = wait($dispatch($command));
 
@@ -187,7 +188,7 @@ describe('Prooph Micro', function () {
                     'implements' => EventStoreConnection::class,
                 ]);
 
-                $dispatch = buildCommandDispatcher($connection, $map);
+                $dispatch = buildCommandDispatcher($connection, $map, fn ($e) => $e);
                 $syncedDispatch = fn () => wait($dispatch($command));
 
                 expect($syncedDispatch)->toThrow(
@@ -240,7 +241,7 @@ describe('Prooph Micro', function () {
                 allow($slice)->toReceive('status')->andReturn(SliceReadStatus::success());
                 allow($slice)->toReceive('events')->andReturn([$re1, $re2, $re3]);
 
-                $dispatch = buildCommandDispatcher($connection, $map);
+                $dispatch = buildCommandDispatcher($connection, $map, fn ($e) => $e);
                 $syncedDispatch = fn () => wait($dispatch($command));
 
                 expect($syncedDispatch)->toThrow(new RuntimeException('Boom!'));

@@ -31,10 +31,11 @@ const buildCommandDispatcher = 'Prooph\Micro\Kernel\buildCommandDispatcher';
 function buildCommandDispatcher(
     EventStoreConnection $eventStore,
     ImmMap $commandMap,
+    callable $enrich,
     int $readBatchSize = 200
 ): callable {
-    return function (object $m) use ($eventStore, $commandMap, $readBatchSize): Promise {
-        return call(function () use ($m, $eventStore, $commandMap, $readBatchSize): Generator {
+    return function (object $m) use ($eventStore, $commandMap, $enrich, $readBatchSize): Promise {
+        return call(function () use ($m, $eventStore, $commandMap, $enrich, $readBatchSize): Generator {
             $messageClass = \get_class($m);
             $config = $commandMap->get($messageClass);
 
@@ -47,7 +48,7 @@ function buildCommandDispatcher(
             $specification = $config->get()($m);
             \assert($specification instanceof CommandSpecification);
 
-            $iterator = new Producer(function (callable $emit) use ($eventStore, $specification, $readBatchSize): Generator {
+            $iterator = new Producer(function (callable $emit) use ($eventStore, $specification, $enrich, $readBatchSize): Generator {
                 $generator = $specification->handle(stateResolver($eventStore, $specification, $readBatchSize));
 
                 while ($generator->valid()) {
@@ -68,7 +69,7 @@ function buildCommandDispatcher(
             while (yield $iterator->advance()) {
                 $event = $iterator->getCurrent();
 
-                $events[] = $event;
+                $events[] = $specification->enrich($event, $enrich);
                 $eventData[] = $specification->mapToEventData($event);
             }
 
