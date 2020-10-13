@@ -67,9 +67,9 @@ function buildCommandDispatcher(
             $eventData = [];
 
             while (yield $iterator->advance()) {
-                $event = $iterator->getCurrent();
+                $event = $specification->enrich($iterator->getCurrent(), $enrich);
 
-                $events[] = $specification->enrich($event, $enrich);
+                $events[] = $event;
                 $eventData[] = $specification->mapToEventData($event);
             }
 
