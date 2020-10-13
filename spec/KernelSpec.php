@@ -169,7 +169,7 @@ describe('Prooph Micro', function () {
 
                 allow($connection)->toReceive('appendToStreamAsync')->andRun(fn () => new Success());
 
-                $dispatch = buildCommandDispatcher($connection, $map, fn ($e) => $e);
+                $dispatch = buildCommandDispatcher($connection, $map, fn ($c, $e) => $e);
 
                 $result = wait($dispatch($command));
 
@@ -188,7 +188,7 @@ describe('Prooph Micro', function () {
                     'implements' => EventStoreConnection::class,
                 ]);
 
-                $dispatch = buildCommandDispatcher($connection, $map, fn ($e) => $e);
+                $dispatch = buildCommandDispatcher($connection, $map, fn ($c, $e) => $e);
                 $syncedDispatch = fn () => wait($dispatch($command));
 
                 expect($syncedDispatch)->toThrow(
@@ -241,7 +241,7 @@ describe('Prooph Micro', function () {
                 allow($slice)->toReceive('status')->andReturn(SliceReadStatus::success());
                 allow($slice)->toReceive('events')->andReturn([$re1, $re2, $re3]);
 
-                $dispatch = buildCommandDispatcher($connection, $map, fn ($e) => $e);
+                $dispatch = buildCommandDispatcher($connection, $map, fn ($c, $e) => $e);
                 $syncedDispatch = fn () => wait($dispatch($command));
 
                 expect($syncedDispatch)->toThrow(new RuntimeException('Boom!'));
