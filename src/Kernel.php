@@ -55,7 +55,11 @@ function buildCommandDispatcher(
                     $eventOrPromise = $generator->current();
 
                     if ($eventOrPromise instanceof Promise) {
-                        $generator->send(yield $eventOrPromise);
+                        try {
+                            $generator->send(yield $eventOrPromise);
+                        } catch (\Throwable $exception) {
+                            $generator->throw($exception);
+                        }
                     } else {
                         yield $emit($eventOrPromise);
                         $generator->next();
